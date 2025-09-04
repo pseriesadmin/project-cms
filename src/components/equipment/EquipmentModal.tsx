@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Equipment, FormField } from '../../types';
+import { Equipment, FormField, CategoryCode } from '../../types';
 import { useGeminiAI } from '../../hooks/useGeminiAI';
+import QRCode from 'qrcode';
 
 interface EquipmentModalProps {
   equipment: Equipment | null;
@@ -20,6 +21,9 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   const [formData, setFormData] = useState<Partial<Equipment>>({});
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [categoryCodes, setCategoryCodes] = useState<CategoryCode[]>([]);
+  const [qrCodePreview, setQrCodePreview] = useState<string>('');
+  const [internalIsEditing, setInternalIsEditing] = useState(isEditing);
   
   const {
     isGeneratingSpecs,
@@ -33,11 +37,16 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   useEffect(() => {
     if (equipment) {
       setFormData(equipment);
+      // 기존 장비의 코드가 있으면 QR코드 미리보기 생성
+      if (equipment.code) {
+        generateQRCodePreview(equipment.code);
+      }
     } else {
       // 새 장비 등록 시 등록일시 기본값 설정
       setFormData({
         registrationDate: new Date().toISOString().split('T')[0]
       });
+      setQrCodePreview(''); // QR코드 미리보기 초기화
     }
   }, [equipment]);
 
@@ -48,6 +57,17 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     }
   }, [getApiKey]);
 
+  useEffect(() => {
+    const savedCategoryCodes = localStorage.getItem('category-codes');
+    if (savedCategoryCodes) {
+      setCategoryCodes(JSON.parse(savedCategoryCodes));
+    }
+  }, []);
+
+  useEffect(() => {
+    setInternalIsEditing(isEditing);
+  }, [isEditing]);
+
   const activeFields = formFields.filter(field => field.active !== false);
 
   const handleInputChange = (name: string, value: any) => {
@@ -55,6 +75,23 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       ...prev,
       [name]: value
     }));
+
+    // 분류코드 선택 시 카테고리 자동 입력
+    if (name === 'categoryCode' && value) {
+      const selectedCategory = categoryCodes.find(cc => cc.code === value);
+      if (selectedCategory) {
+        setFormData(prev => ({
+          ...prev,
+          [name]: value,
+          category: selectedCategory.name
+        }));
+      }
+    }
+
+    // 장비코드 변경 시 QR코드 미리보기 업데이트
+    if (name === 'code' && value) {
+      generateQRCodePreview(value);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -75,6 +112,13 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     // 장비 코드 중복 체크는 부모 컴포넌트에서 처리
 
     onSubmit(formData as Equipment);
+    
+    // QR코드 생성 (장비 코드가 있는 경우)
+    if (formData.code) {
+      setTimeout(() => {
+        generateQRCode(formData.code as string);
+      }, 500); // 약간의 지연 후 QR코드 생성
+    }
   };
 
   const handleGenerateSpecs = async () => {
@@ -115,6 +159,44 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
 
   const renderField = (field: FormField) => {
     const value = formData[field.name] || '';
+    
+    // 장비코드 필드에 제품군 분류코드 드롭다운 추가
+    if (field.name === 'code') {
+      return (
+        <div className="flex gap-2">
+          <div className="w-1/3">
+            <select
+              value={formData.categoryCode || ''}
+              onChange={(e) => handleInputChange('categoryCode', e.target.value)}
+              className="mt-1 block w-full rounded-md border-stone-300 shadow-sm p-2 text-sm"
+            >
+              <option value="">분류코드 선택</option>
+              {categoryCodes.map((categoryCode) => (
+                <option key={categoryCode.id} value={categoryCode.code}>
+                  {categoryCode.code} - {categoryCode.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => {
+                // 영문, 숫자 조합 10자 제한
+                const newValue = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+                handleInputChange(field.name, newValue);
+              }}
+              className="mt-1 block w-full rounded-md border-stone-300 shadow-sm p-2 text-sm"
+              disabled={field.disabledOnEdit && !!equipment}
+              required={field.required}
+              placeholder="영문, 숫자 10자"
+              maxLength={10}
+            />
+          </div>
+        </div>
+      );
+    }
     
     if (field.type === 'textarea') {
       return (
@@ -182,6 +264,53 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     );
   };
 
+  // QR코드 미리보기 생성 함수
+  const generateQRCodePreview = async (equipmentCode: string) => {
+    try {
+      const qrData = `https://crazyshot.kr/equipment/${equipmentCode}`;
+      const qrCodeDataURL = await QRCode.toDataURL(qrData, {
+        width: 200,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setQrCodePreview(qrCodeDataURL);
+    } catch (error) {
+      console.error('QR코드 미리보기 생성 오류:', error);
+      setQrCodePreview('');
+    }
+  };
+
+  // QR코드 생성 및 다운로드 함수
+  const generateQRCode = async (equipmentCode: string) => {
+    try {
+      const qrData = `https://crazyshot.kr/equipment/${equipmentCode}`;
+      const qrCodeDataURL = await QRCode.toDataURL(qrData, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+
+      // QR코드 이미지 다운로드
+      const link = document.createElement('a');
+      link.download = `QR_${equipmentCode}.png`;
+      link.href = qrCodeDataURL;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      alert(`QR코드가 생성되었습니다!\n파일명: QR_${equipmentCode}.png`);
+    } catch (error) {
+      console.error('QR코드 생성 오류:', error);
+      alert('QR코드 생성에 실패했습니다.');
+    }
+  };
+
   // 이미지 URL 확인 함수
   const isImageUrl = (url: string) => {
     if (!url) return false;
@@ -195,12 +324,25 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-stone-200 sticky top-0 bg-white z-10">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-stone-900">
-              {isEditing 
-                ? (equipment ? '장비 정보 수정' : '새 장비 등록')
-                : equipment?.name || '장비 상세보기'
-              }
-            </h2>
+            <div className="flex items-center gap-4 flex-1">
+              <h2 className="text-2xl font-bold text-stone-900">
+                {internalIsEditing 
+                  ? (equipment ? '장비 정보 수정' : '새 장비 등록')
+                  : equipment?.name || '장비 상세보기'
+                }
+              </h2>
+              {/* QR코드 썸네일 (상세보기 모드에서만 표시) */}
+              {!internalIsEditing && qrCodePreview && (
+                <div className="ml-auto mr-4">
+                  <img 
+                    src={qrCodePreview} 
+                    alt="QR Code" 
+                    className="w-16 h-16 border border-stone-300 rounded"
+                    title="제품 QR코드"
+                  />
+                </div>
+              )}
+            </div>
             <button 
               onClick={onClose}
               className="text-stone-500 hover:text-stone-800 text-2xl"
@@ -208,15 +350,24 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
               &times;
             </button>
           </div>
-          {!isEditing && equipment && (
-            <p className="text-sm text-stone-500 mt-1">
-              장비 코드: {equipment.code}
-            </p>
+          {!internalIsEditing && equipment && (
+            <div className="mt-2">
+              <p className="text-sm text-stone-500">
+                장비 코드: {equipment.categoryCode ? `${equipment.categoryCode}-${equipment.code}` : equipment.code}
+              </p>
+              <button
+                type="button"
+                onClick={() => setInternalIsEditing(true)}
+                className="mt-2 px-3 py-1 text-sm font-medium rounded-md text-white bg-blue-500 hover:bg-blue-600 transition-colors"
+              >
+                수정
+              </button>
+            </div>
           )}
         </div>
 
         <div className="p-6">
-          {isEditing ? (
+          {internalIsEditing ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* 이미지 미리보기 */}
               {formData.imageUrl && isImageUrl(formData.imageUrl as string) && (
@@ -245,12 +396,11 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
               </div>
 
               {/* AI 스펙 생성기 */}
-              {!equipment && (
-                <div className="mt-6 p-4 bg-teal-50 border-l-4 border-teal-400 rounded-md">
-                  <p className="font-bold text-teal-800">✨AI 스펙 생성기</p>
-                  <p className="text-teal-700 text-sm mt-1">
-                    장비의 품명과 제조사를 입력하면 AI가 자동으로 주요 스펙과 세부 기능, 구성품을 채워줍니다.
-                  </p>
+              <div className="mt-6 p-4 bg-teal-50 border-l-4 border-teal-400 rounded-md">
+                <p className="font-bold text-teal-800">✨AI 스펙 생성기</p>
+                <p className="text-teal-700 text-sm mt-1">
+                  장비의 품명과 제조사를 입력하면 AI가 자동으로 주요 스펙과 세부 기능, 구성품을 {equipment ? '수정해' : '채워'}줍니다.
+                </p>
                   
                   {/* API 키 입력 섹션 */}
                   {showApiKeyInput && (
@@ -307,6 +457,23 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                   {aiError && (
                     <p className="text-red-500 text-sm mt-2">{aiError}</p>
                   )}
+              </div>
+
+              {/* QR코드 미리보기 */}
+              {qrCodePreview && (
+                <div className="flex justify-center mt-6">
+                  <div className="bg-white p-4 rounded-lg border-2 border-dashed border-stone-300 text-center">
+                    <img 
+                      src={qrCodePreview} 
+                      alt="QR Code Preview" 
+                      className="mx-auto mb-2"
+                      style={{ width: '150px', height: '150px' }}
+                    />
+                    <p className="text-xs text-stone-500">
+                      QR코드 미리보기<br/>
+                      등록/수정 시 자동 다운로드됩니다
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -351,17 +518,21 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                   }
 
                   const value = equipment?.[field.name] || '정보 없음';
-                  const formattedValue = field.type === 'number' ? 
-                    (value as number).toLocaleString() : 
-                    field.type === 'url' ? 
-                      `${value}` : // URL은 그대로 표시 (링크 기능은 필요시 추가)
-                    field.type === 'date' && value !== '정보 없음' ?
-                      new Date(value as string).toLocaleDateString('ko-KR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      }) :
-                      Array.isArray(value) ? value.join(', ') : value;
+                  
+                  // 장비코드 필드는 분류코드와 함께 표시
+                  const formattedValue = field.name === 'code' ?
+                    (equipment?.categoryCode ? `${equipment.categoryCode}-${value}` : value) :
+                    field.type === 'number' ? 
+                      (value as number).toLocaleString() : 
+                      field.type === 'url' ? 
+                        `${value}` : // URL은 그대로 표시 (링크 기능은 필요시 추가)
+                      field.type === 'date' && value !== '정보 없음' ?
+                        new Date(value as string).toLocaleDateString('ko-KR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        }) :
+                        Array.isArray(value) ? value.join(', ') : value;
 
                   return (
                     <div key={field.id}>

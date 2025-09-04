@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FormField, Equipment } from '../../types';
+import { FormField, Equipment, CategoryCode } from '../../types';
 
 interface FormFieldManagerProps {
   formFields: FormField[];
@@ -27,6 +27,19 @@ export const FormFieldManager: React.FC<FormFieldManagerProps> = ({
   });
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // 관리코드 설정 모달 관련 state
+  const [showCategoryCodeModal, setShowCategoryCodeModal] = useState(false);
+  const [categoryCodes, setCategoryCodes] = useState<CategoryCode[]>([]);
+  const [newCategoryCode, setNewCategoryCode] = useState({ code: '', name: '' });
+
+  // categoryCodes 로드
+  useEffect(() => {
+    const savedCategoryCodes = localStorage.getItem('category-codes');
+    if (savedCategoryCodes) {
+      setCategoryCodes(JSON.parse(savedCategoryCodes));
+    }
+  }, []);
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
@@ -242,6 +255,55 @@ export const FormFieldManager: React.FC<FormFieldManagerProps> = ({
     }
   };
 
+  // 관리코드 관련 핸들러
+  const saveCategoryCodes = (codes: CategoryCode[]) => {
+    localStorage.setItem('category-codes', JSON.stringify(codes));
+    setCategoryCodes(codes);
+  };
+
+  const handleAddCategoryCode = () => {
+    if (!newCategoryCode.code.trim() || !newCategoryCode.name.trim()) {
+      alert('코드와 이름을 모두 입력해주세요.');
+      return;
+    }
+
+    // 영문, 숫자 조합 50자 제한 검증
+    const codeRegex = /^[a-zA-Z0-9]{1,50}$/;
+    if (!codeRegex.test(newCategoryCode.code)) {
+      alert('코드는 영문, 숫자 조합으로 최대 50자까지 입력 가능합니다.');
+      return;
+    }
+
+    // 중복 검사
+    if (categoryCodes.some(cc => cc.code === newCategoryCode.code)) {
+      alert('이미 존재하는 코드입니다.');
+      return;
+    }
+
+    const newCode: CategoryCode = {
+      id: `cc-${Date.now()}`,
+      code: newCategoryCode.code,
+      name: newCategoryCode.name,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedCodes = [...categoryCodes, newCode];
+    saveCategoryCodes(updatedCodes);
+    setNewCategoryCode({ code: '', name: '' });
+    alert('제품군 분류코드가 추가되었습니다.');
+  };
+
+  const handleDeleteCategoryCode = (id: string) => {
+    const code = categoryCodes.find(cc => cc.id === id);
+    if (!code) return;
+
+    if (confirm(`'${code.name}' 코드를 삭제하시겠습니까?`)) {
+      const updatedCodes = categoryCodes.filter(cc => cc.id !== id);
+      saveCategoryCodes(updatedCodes);
+      alert('제품군 분류코드가 삭제되었습니다.');
+    }
+  };
+
   return (
     <>
       {/* 메인 모달 */}
@@ -368,11 +430,23 @@ export const FormFieldManager: React.FC<FormFieldManagerProps> = ({
             <button
               type="button"
               onClick={handleAddField}
-              className="w-full px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 hover:scale-105 active:scale-95 transition-all duration-200 mb-6 shadow-md hover:shadow-lg"
+              className="w-full px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 hover:scale-105 active:scale-95 transition-all duration-200 mb-3 shadow-md hover:shadow-lg"
             >
               <span className="inline-flex items-center">
                 <span className="text-lg mr-2">+</span>
                 새 항목 추가
+              </span>
+            </button>
+
+            {/* 관리코드 설정 버튼 */}
+            <button
+              type="button"
+              onClick={() => setShowCategoryCodeModal(true)}
+              className="w-full px-4 py-2 bg-purple-500 text-white text-sm font-medium rounded-md hover:bg-purple-600 hover:scale-105 active:scale-95 transition-all duration-200 mb-6 shadow-md hover:shadow-lg"
+            >
+              <span className="inline-flex items-center">
+                <span className="text-lg mr-2">⚙️</span>
+                관리코드 설정
               </span>
             </button>
 
@@ -540,6 +614,107 @@ export const FormFieldManager: React.FC<FormFieldManagerProps> = ({
                   ) : (
                     '저장'
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 관리코드 설정 모달 */}
+      {showCategoryCodeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4" style={{ zIndex: 1100 }}>
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="p-6 border-b border-stone-200 sticky top-0 bg-white">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold text-stone-800">제품군 분류코드 관리</h2>
+                <button 
+                  onClick={() => setShowCategoryCodeModal(false)}
+                  className="text-stone-500 hover:text-stone-800 text-2xl"
+                >
+                  &times;
+                </button>
+              </div>
+              <p className="text-stone-500 text-sm mt-1">
+                장비 등록 시 사용할 제품군 분류코드를 관리합니다.
+              </p>
+            </div>
+
+            <div className="p-6">
+              {/* 새 코드 추가 */}
+              <div className="mb-6 p-4 bg-purple-50 rounded-lg border">
+                <h3 className="text-lg font-semibold text-purple-800 mb-3">새 코드 추가</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">
+                      코드 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newCategoryCode.code}
+                      onChange={(e) => setNewCategoryCode({...newCategoryCode, code: e.target.value})}
+                      className="w-full rounded-md border border-stone-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 focus:ring-1 p-2 text-sm"
+                      placeholder="예: CAMERA01"
+                      maxLength={50}
+                    />
+                    <p className="text-xs text-stone-500 mt-1">영문, 숫자 조합 최대 50자</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">
+                      이름 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newCategoryCode.name}
+                      onChange={(e) => setNewCategoryCode({...newCategoryCode, name: e.target.value})}
+                      className="w-full rounded-md border border-stone-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 focus:ring-1 p-2 text-sm"
+                      placeholder="예: 카메라 장비"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddCategoryCode}
+                  className="mt-3 px-4 py-2 bg-purple-500 text-white text-sm font-medium rounded-md hover:bg-purple-600 transition-colors"
+                >
+                  추가
+                </button>
+              </div>
+
+              {/* 기존 코드 목록 */}
+              <div>
+                <h3 className="text-lg font-semibold text-stone-800 mb-3">등록된 코드 ({categoryCodes.length}개)</h3>
+                {categoryCodes.length === 0 ? (
+                  <p className="text-stone-500 text-center py-8">등록된 분류코드가 없습니다.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {categoryCodes.map((code) => (
+                      <div key={code.id} className="flex justify-between items-center p-3 bg-stone-50 rounded-md">
+                        <div>
+                          <span className="font-medium text-stone-800">{code.code}</span>
+                          <span className="text-stone-500 ml-2">- {code.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategoryCode(code.id)}
+                          className="px-3 py-1 text-xs font-medium rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 닫기 버튼 */}
+              <div className="mt-6 text-right">
+                <button
+                  type="button"
+                  onClick={() => setShowCategoryCodeModal(false)}
+                  className="px-4 py-2 bg-stone-500 text-white text-sm font-medium rounded-md hover:bg-stone-600 transition-colors"
+                >
+                  닫기
                 </button>
               </div>
             </div>

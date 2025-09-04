@@ -39,6 +39,7 @@ export interface ProjectData {
 // 장비 현황 관련 타입 정의
 export interface Equipment {
   registrationDate: string; // 등록일시 필드 추가
+  categoryCode?: string; // 제품군 분류코드
   code: string;
   name: string;
   category: string;
@@ -91,4 +92,12 @@ export interface VersionHistory {
   date: string;
   summary: string;
   details: string;
+}
+
+// 제품군 분류코드 관련 타입 정의
+export interface CategoryCode {
+  id: string;
+  code: string; // 영문, 숫자 조합 50자 제한
+  name: string;
+  createdAt: string;
 }
