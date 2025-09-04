@@ -1,0 +1,94 @@
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+export interface PerformanceRecord {
+  date: string;
+  docLink: string;
+  comment: string;
+}
+
+export interface Task {
+  id: string;
+  mainTask: string[];
+  personInCharge: string;
+  schedule: string;
+  checkpoints: ChecklistItem[];
+  performance: PerformanceRecord;
+  issues: string;
+}
+
+export interface ProjectPhase {
+  id: string;
+  title: string;
+  tasks: Task[];
+}
+
+export interface LogEntry {
+  timestamp: string;
+  message: string;
+}
+
+export interface ProjectData {
+  projectPhases: ProjectPhase[];
+  logs: LogEntry[];
+}
+
+// 장비 현황 관련 타입 정의
+export interface Equipment {
+  registrationDate: string; // 등록일시 필드 추가
+  code: string;
+  name: string;
+  category: string;
+  manufacturer: string;
+  rental: number;
+  deposit: number;
+  totalStock: number;
+  availableStock: number;
+  specs?: string;
+  features?: string[];
+  components?: string;
+  info?: string;
+  imageUrl?: string;
+  [key: string]: any; // 동적 필드 지원
+}
+
+export interface FormField {
+  id: string;
+  label: string;
+  name: string;
+  type: 'text' | 'number' | 'date' | 'textarea' | 'url';
+  required?: boolean;
+  disabledOnEdit?: boolean;
+  group?: string;
+  active?: boolean;
+  core?: boolean;
+  hiddenAt?: string;
+}
+
+export interface EquipmentLogEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  itemCode: string;
+  itemName: string;
+  userId: string;
+  changes?: any;
+  summary: string;
+}
+
+export interface EquipmentState {
+  category: string;
+  manufacturer: string;
+  maxPrice: number;
+  searchQuery: string;
+}
+
+export interface VersionHistory {
+  version: string;
+  date: string;
+  summary: string;
+  details: string;
+}

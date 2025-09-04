@@ -1,0 +1,311 @@
+# CSPM (CrazyShot Project Manager) 시스템 개발 규정
+
+## 📋 개요
+크레이지샷 프로젝트 매니저 시스템 유지보수 및 개발 시 반드시 준수해야 할 필수 규정 문서입니다.
+
+---
+
+## 🏗️ 기술 스택 및 아키텍처
+
+### 프론트엔드
+- **프레임워크**: React 18.2.0 + TypeScript
+- **빌드 도구**: Vite 7.1.2
+- **스타일링**: TailwindCSS (CDN)
+- **상태 관리**: React Hook 기반 로컬 상태 관리
+- **컴포넌트 구조**: 함수형 컴포넌트 + React Hooks
+
+### 개발 환경
+- **Node.js**: v20.19.0 이상 (NVM 사용 권장)
+- **패키지 관리**: npm 10.8.2 이상
+- **코드 품질**: ESLint + TypeScript 컴파일러
+- **개발 서버**: Vite Dev Server (기본 포트: 5173)
+
+---
+
+## 📁 프로젝트 구조 규칙
+
+### 디렉토리 구조
+```
+/project-manager/
+├── src/
+│   ├── components/         # 재사용 가능한 컴포넌트
+│   ├── data/              # 정적 데이터 및 초기값
+│   ├── types.ts           # TypeScript 타입 정의
+│   ├── index.tsx          # 애플리케이션 진입점
+│   └── App.tsx            # 메인 애플리케이션 컴포넌트
+├── public/                # 정적 자산
+├── index.html             # HTML 템플릿
+└── cspm.mdc              # 이 개발 규정 문서
+```
+
+### 파일 명명 규칙
+- **컴포넌트**: PascalCase (예: `TaskRow.tsx`, `ChecklistManager.tsx`)
+- **타입 파일**: camelCase + .ts 확장자 (예: `types.ts`)
+- **데이터 파일**: camelCase + .ts 확장자 (예: `initialData.ts`)
+- **설정 파일**: kebab-case (예: `vite.config.ts`)
+
+---
+
+## 🎨 UI/UX 디자인 가이드라인
+
+### 색상 팔레트 (Tailwind 커스텀)
+```css
+crazy-red: #CF0000           /* 주요 액션, 경고 */
+crazy-red-light: #FF3535     /* 호버 상태 */
+crazy-dark-blue: #1D183E     /* 헤더, 네비게이션 */
+crazy-blue: #3B2F8A          /* 보조 요소 */
+crazy-bright-blue: #553FE0   /* 강조 요소 */
+crazy-lavender: #C1BBEC      /* 연한 배경 */
+crazy-dark-gray: #444444     /* 텍스트 */
+crazy-gray: #777777          /* 보조 텍스트 */
+```
+
+### 레이아웃 원칙
+- **반응형 디자인**: 모바일 우선 (Mobile First)
+- **그리드 시스템**: CSS Grid + Flexbox 조합
+- **간격**: Tailwind 스페이싱 시스템 준수 (4px 단위)
+- **타이포그래피**: 시스템 폰트 스택 사용
+
+---
+
+## 🔧 개발 규칙
+
+### TypeScript 규칙
+```typescript
+// ✅ 좋은 예
+interface TaskProps {
+  id: string;
+  title: string;
+  completed: boolean;
+  onToggle: (id: string) => void;
+}
+
+// ❌ 나쁜 예
+const TaskComponent = (props: any) => {
+  // any 타입 사용 금지
+}
+```
+
+### 컴포넌트 작성 규칙
+1. **함수형 컴포넌트 사용**: 클래스 컴포넌트 금지
+2. **Props 인터페이스 정의**: 모든 props에 타입 정의 필수
+3. **React.memo 사용**: 성능 최적화가 필요한 경우
+4. **커스텀 훅 분리**: 복잡한 로직은 별도 훅으로 추출
+
+### 상태 관리 규칙
+```typescript
+// ✅ useState 사용 (로컬 상태)
+const [tasks, setTasks] = useState<Task[]>([]);
+
+// ✅ useReducer 사용 (복잡한 상태)
+const [state, dispatch] = useReducer(taskReducer, initialState);
+
+// ❌ 전역 상태 라이브러리 금지 (Redux, Zustand 등)
+```
+
+### 스타일링 규칙
+```tsx
+// ✅ Tailwind 클래스 사용
+<div className="bg-crazy-red text-white p-4 rounded-lg">
+
+// ✅ 조건부 클래스
+<div className={`base-class ${isActive ? 'active-class' : 'inactive-class'}`}>
+
+// ❌ 인라인 스타일 금지
+<div style={{ backgroundColor: '#CF0000' }}>
+```
+
+---
+
+## 📝 코드 품질 규칙
+
+### ESLint 규칙 준수
+- **Unused variables**: 사용하지 않는 변수 제거
+- **Console logs**: 프로덕션에서 console.log 제거
+- **React Hooks**: Hook 규칙 준수 (useEffect 의존성 배열 등)
+
+### 코멘트 작성 규칙
+```typescript
+// ✅ 복잡한 로직에 대한 설명
+/**
+ * 프로젝트 단계별 진행률을 계산합니다.
+ * @param phases - 프로젝트 단계 배열
+ * @returns 전체 진행률 (0-100)
+ */
+const calculateProgress = (phases: ProjectPhase[]): number => {
+  // 구현 내용...
+}
+
+// ❌ 명확한 코드에 불필요한 주석
+const name = 'John'; // 이름을 John으로 설정
+```
+
+---
+
+## 🚀 배포 및 빌드 규칙
+
+### 빌드 명령어
+```bash
+# 개발 서버 실행
+npm run dev
+
+# 프로덕션 빌드
+npm run build
+
+# 빌드 결과 미리보기
+npm run preview
+
+# 코드 린팅
+npm run lint
+```
+
+### 빌드 전 체크리스트
+- [ ] TypeScript 컴파일 오류 없음
+- [ ] ESLint 규칙 통과
+- [ ] 모든 컴포넌트 정상 렌더링
+- [ ] 브라우저 콘솔 에러 없음
+- [ ] 반응형 레이아웃 테스트 완료
+
+---
+
+## 🔄 버전 관리 규칙
+
+### Git 커밋 메시지 규칙
+```
+feat: 새로운 기능 추가
+fix: 버그 수정
+docs: 문서 수정
+style: 코드 포맷팅, 세미콜론 누락 등
+refactor: 코드 리팩토링
+test: 테스트 추가
+chore: 빌드 업무 수정, 패키지 매니저 수정
+
+예시:
+feat: 체크리스트 항목 드래그 앤 드롭 기능 추가
+fix: 프로젝트 진행률 계산 오류 수정
+```
+
+### 브랜치 전략
+- **main**: 프로덕션 브랜치
+- **develop**: 개발 브랜치
+- **feature/**: 기능 개발 브랜치
+- **hotfix/**: 긴급 수정 브랜치
+
+---
+
+## 🛠️ 개발 환경 설정
+
+### 필수 설치 항목
+```bash
+# NVM 설치 (Node.js 버전 관리)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+# Node.js 20.19.0 설치
+nvm install 20.19.0
+nvm use 20.19.0
+
+# 프로젝트 의존성 설치
+npm install
+
+# 개발 서버 실행
+npm run dev
+```
+
+### IDE 설정 권장사항
+- **VSCode 확장**: ES7+ React/Redux/React-Native snippets
+- **자동 포맷팅**: Prettier 설정
+- **TypeScript**: strict 모드 활성화
+- **자동 완성**: Tailwind CSS IntelliSense
+
+---
+
+## 🔍 성능 최적화 규칙
+
+### React 최적화
+```typescript
+// ✅ React.memo 사용
+const TaskItem = React.memo(({ task, onToggle }: TaskItemProps) => {
+  return <div onClick={() => onToggle(task.id)}>{task.title}</div>;
+});
+
+// ✅ useCallback 사용
+const handleToggle = useCallback((id: string) => {
+  setTasks(prev => prev.map(task => 
+    task.id === id ? { ...task, completed: !task.completed } : task
+  ));
+}, []);
+
+// ✅ useMemo 사용
+const filteredTasks = useMemo(() => 
+  tasks.filter(task => task.category === selectedCategory),
+  [tasks, selectedCategory]
+);
+```
+
+### 번들 최적화
+- **코드 분할**: 필요시 React.lazy() 사용
+- **이미지 최적화**: WebP 포맷 권장
+- **폰트 최적화**: 시스템 폰트 우선 사용
+
+---
+
+## 🔐 보안 및 데이터 관리
+
+### 데이터 보안
+- **로컬 스토리지**: 민감하지 않은 데이터만 저장
+- **입력 검증**: 모든 사용자 입력에 대한 유효성 검사
+- **XSS 방지**: innerHTML 대신 textContent 사용
+
+### 데이터 구조
+```typescript
+// ✅ 명확한 타입 정의
+interface Project {
+  id: string;
+  title: string;
+  phases: ProjectPhase[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface ProjectPhase {
+  id: string;
+  name: string;
+  tasks: Task[];
+  completed: boolean;
+}
+```
+
+---
+
+## 📚 참고 자료
+
+### 공식 문서
+- [React 공식 문서](https://react.dev/)
+- [TypeScript 공식 문서](https://www.typescriptlang.org/)
+- [Vite 공식 문서](https://vitejs.dev/)
+- [Tailwind CSS 공식 문서](https://tailwindcss.com/)
+
+### 내부 가이드라인
+- 크레이지샷 브랜드 가이드라인
+- UI/UX 디자인 시스템
+- 코드 리뷰 체크리스트
+
+---
+
+## 📞 문의 및 지원
+
+### 개발 관련 문의
+- **기술 지원**: 개발팀 리드
+- **디자인 검토**: UI/UX 팀
+- **코드 리뷰**: 시니어 개발자
+
+### 긴급 상황 대응
+1. 빌드 실패 시: `npm run build` 재실행
+2. 개발 서버 오류 시: `npm install` 후 재시작
+3. TypeScript 오류 시: 타입 정의 재확인
+
+---
+
+**최종 업데이트**: 2024년 12월
+**문서 버전**: v1.0.0
+**담당자**: 크레이지샷 개발팀
