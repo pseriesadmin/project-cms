@@ -51,8 +51,7 @@ export const useEquipmentExport = () => {
     const csv = Papa.unparse(exportData, {
       quotes: true,
       header: true,
-      delimiter: ',',
-      encoding: 'utf-8'
+      delimiter: ','
     });
     
     // UTF-8 BOM 추가로 엑셀에서 한글 깨짐 방지
@@ -96,8 +95,7 @@ export const useEquipmentExport = () => {
     const csv = Papa.unparse(sortedLogs, {
       quotes: true,
       header: true,
-      delimiter: ',',
-      encoding: 'utf-8'
+      delimiter: ','
     });
     
     const blob = new Blob(["\ufeff" + csv], { 
