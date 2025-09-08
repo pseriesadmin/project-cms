@@ -3,6 +3,80 @@ import Papa from 'papaparse';
 import { Equipment, FormField, EquipmentLogEntry } from '../types';
 
 export const useEquipmentExport = () => {
+  // 클라우드 백업 (Vercel 기반)
+  const cloudBackup = useCallback(async (
+    equipmentData: Equipment[],
+    logData: EquipmentLogEntry[],
+    logArchive: any[],
+    formFields: FormField[],
+    _versionHistory: any[]
+  ) => {
+    try {
+      const categoryCodes = JSON.parse(localStorage.getItem('category-codes') || '[]');
+      const geminiApiKey = localStorage.getItem('geminiApiKey') || null;
+
+      const response = await fetch('/api/backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          equipmentData,
+          logData,
+          logArchive,
+          formFields,
+          categoryCodes,
+          geminiApiKey
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('✅ 클라우드 백업 완료:', result.backupId);
+        alert(`✅ 클라우드 백업이 완료되었습니다!\n\n백업 ID: ${result.backupId}\n포함된 데이터:\n- 장비목록: ${result.dataSize.장비목록}개\n- 변경로그: ${result.dataSize.로그}개\n- 양식항목: ${result.dataSize.양식항목}개\n- 분류코드: ${result.dataSize.분류코드}개`);
+        return result.backupId;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('❌ 클라우드 백업 실패:', error);
+      alert('클라우드 백업 중 오류가 발생했습니다. 로컬 백업을 사용해주세요.');
+      throw error;
+    }
+  }, []);
+
+  // 클라우드 복원 (Vercel 기반)
+  const cloudRestore = useCallback(async (): Promise<{
+    equipmentData: Equipment[];
+    logData: EquipmentLogEntry[];
+    logArchive: any[];
+    formFields: FormField[];
+    categoryCodes?: any[];
+    geminiApiKey?: string;
+  }> => {
+    try {
+      const response = await fetch('/api/backup');
+      const result = await response.json();
+      
+      if (result.success) {
+        // localStorage 복원
+        if (result.data.geminiApiKey) {
+          localStorage.setItem('geminiApiKey', result.data.geminiApiKey);
+        }
+        if (result.data.categoryCodes && Array.isArray(result.data.categoryCodes)) {
+          localStorage.setItem('category-codes', JSON.stringify(result.data.categoryCodes));
+        }
+
+        console.log('✅ 클라우드 복원 완료:', result.backupId);
+        return result.data;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('❌ 클라우드 복원 실패:', error);
+      throw new Error('클라우드에서 데이터를 복원할 수 없습니다.');
+    }
+  }, []);
+
   // CSV 내보내기 (엑셀 호환성 향상)
   const exportToCSV = useCallback((
     equipmentData: Equipment[], 
@@ -167,8 +241,15 @@ export const useEquipmentExport = () => {
         
         alert(`✅ 모든 데이터가 ${fileName}으로 성공적으로 백업되었습니다.\n\n포함된 데이터:\n- 장비목록: ${allData.equipmentData.length}개\n- 변경로그: ${allData.logData.length + allData.logArchive.flatMap(a => a.logs || []).length}개\n- 양식항목: ${allData.formFields.length}개\n- 분류코드: ${allData.categoryCodes.length}개\n- AI API키: ${allData.geminiApiKey ? '포함됨' : '미설정'}`);
         return dirHandle;
-      } catch (error) {
-        // 사용자가 취소하거나 오류 발생 시 기존 방식 유지
+      } catch (error: any) {
+        // 사용자가 취소한 경우 (AbortError 또는 NotAllowedError)
+        if (error.name === 'AbortError' || error.name === 'NotAllowedError') {
+          console.log('사용자가 백업을 취소했습니다.');
+          return null; // 취소 시 아무것도 하지 않음
+        }
+        
+        // 실제 오류 발생 시에만 폴백 다운로드 실행
+        console.log('디렉토리 선택 중 오류 발생, 기본 다운로드 실행:', error);
         fallbackDownload(json);
         return null;
       }
@@ -311,6 +392,8 @@ export const useEquipmentExport = () => {
     backupToJSON,
     importFromCSV,
     restoreFromJSON,
-    fallbackDownload
+    fallbackDownload,
+    cloudBackup,
+    cloudRestore
   };
 };

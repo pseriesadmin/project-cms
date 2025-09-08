@@ -95,23 +95,42 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   };
 
   const handleSubmit = (e: React.FormEvent) => {
+    console.log('🔍 [DEBUG] EquipmentModal handleSubmit 시작');
+    console.log('🔍 [DEBUG] formData:', formData);
+    console.log('🔍 [DEBUG] onSubmit function:', !!onSubmit);
+    
     e.preventDefault();
-    if (!onSubmit) return;
-
-    // 필수 필드 검증
-    const requiredFields = activeFields.filter(field => field.required);
-    const missingFields = requiredFields.filter(field => 
-      !formData[field.name] || formData[field.name] === ''
-    );
-
-    if (missingFields.length > 0) {
-      alert(`다음 필수 필드를 입력해주세요: ${missingFields.map(f => f.label).join(', ')}`);
+    if (!onSubmit) {
+      console.error('🚨 [DEBUG] onSubmit 함수가 없습니다!');
       return;
     }
 
-    // 장비 코드 중복 체크는 부모 컴포넌트에서 처리
+    try {
+      // 필수 필드 검증
+      const requiredFields = activeFields.filter(field => field.required);
+      console.log('🔍 [DEBUG] 필수 필드들:', requiredFields.map(f => f.name));
+      
+      const missingFields = requiredFields.filter(field => 
+        !formData[field.name] || formData[field.name] === ''
+      );
 
-    onSubmit(formData as Equipment);
+      if (missingFields.length > 0) {
+        console.log('🚨 [DEBUG] 필수 필드 누락:', missingFields.map(f => f.name));
+        alert(`다음 필수 필드를 입력해주세요: ${missingFields.map(f => f.label).join(', ')}`);
+        return;
+      }
+
+      console.log('🔍 [DEBUG] 필수 필드 검증 통과, onSubmit 호출');
+      console.log('🔍 [DEBUG] 제출할 formData 최종 상태:', formData);
+      
+      // 장비 코드 중복 체크는 부모 컴포넌트에서 처리
+
+      onSubmit(formData as Equipment);
+      console.log('🔍 [DEBUG] onSubmit 호출 완료');
+    } catch (error) {
+      console.error('🚨 [DEBUG] EquipmentModal handleSubmit 에러:', error);
+      alert('폼 제출 중 오류가 발생했습니다: ' + error);
+    }
     
     // QR코드 생성 (장비 코드가 있는 경우)
     if (formData.code) {
@@ -220,14 +239,71 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
 
     if (field.type === 'number') {
       return (
-        <input
-          type="number"
-          value={value}
-          onChange={(e) => handleInputChange(field.name, parseInt(e.target.value) || 0)}
-          className="mt-1 block w-full rounded-md border-stone-300 shadow-sm p-2 text-sm"
-          disabled={field.disabledOnEdit && !!equipment}
-          required={field.required}
-        />
+        <div className="relative">
+          <input
+            type="text"
+            value={value ? value.toLocaleString() : ''}
+            onChange={(e) => {
+              const numericValue = parseInt(e.target.value.replace(/[^0-9]/g, ''), 10) || 0;
+              
+              // 재고 관련 특별 로직
+              if (field.name === 'availableStock' || field.name === 'totalStock') {
+                const totalStock = field.name === 'totalStock' 
+                  ? numericValue 
+                  : formData.totalStock || 0;
+                
+                const availableStock = field.name === 'availableStock' 
+                  ? numericValue 
+                  : formData.availableStock || 0;
+                
+                // 가용 재고를 먼저 입력하는 경우
+                if (field.name === 'availableStock' && !formData.totalStock) {
+                  alert('총 재고를 먼저 입력해주세요.');
+                  return;
+                }
+                
+                // 가용 재고가 총 재고보다 큰 경우
+                if (availableStock > totalStock) {
+                  alert('가용 재고는 총 재고를 초과할 수 없습니다.');
+                  return;
+                }
+              }
+              
+              handleInputChange(field.name, numericValue);
+            }}
+            className="mt-1 block w-full rounded-md border-stone-300 shadow-sm p-2 text-sm pr-10"
+            disabled={field.disabledOnEdit && !!equipment}
+            required={field.required}
+          />
+          <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+            <div className="flex flex-col">
+              <button 
+                type="button" 
+                onClick={() => {
+                  const currentValue = parseInt(value?.toString().replace(/[^0-9]/g, '') || '0', 10);
+                  handleInputChange(field.name, currentValue + 1);
+                }}
+                className="text-stone-500 hover:text-stone-700 focus:outline-none"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+              </button>
+              <button 
+                type="button" 
+                onClick={() => {
+                  const currentValue = parseInt(value?.toString().replace(/[^0-9]/g, '') || '0', 10);
+                  handleInputChange(field.name, Math.max(0, currentValue - 1));
+                }}
+                className="text-stone-500 hover:text-stone-700 focus:outline-none"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       );
     }
 
@@ -285,8 +361,11 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
 
   // QR코드 생성 및 다운로드 함수
   const generateQRCode = async (equipmentCode: string) => {
+    console.log('🔍 [DEBUG] QR코드 생성 시작:', equipmentCode);
     try {
       const qrData = `https://crazyshot.kr/equipment/${equipmentCode}`;
+      console.log('🔍 [DEBUG] QR데이터:', qrData);
+      
       const qrCodeDataURL = await QRCode.toDataURL(qrData, {
         width: 300,
         margin: 2,
@@ -296,6 +375,8 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
         }
       });
 
+      console.log('🔍 [DEBUG] QR코드 URL 생성 완료');
+
       // QR코드 이미지 다운로드
       const link = document.createElement('a');
       link.download = `QR_${equipmentCode}.png`;
@@ -304,6 +385,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       link.click();
       document.body.removeChild(link);
 
+      console.log('🔍 [DEBUG] QR코드 다운로드 완료');
       alert(`QR코드가 생성되었습니다!\n파일명: QR_${equipmentCode}.png`);
     } catch (error) {
       console.error('QR코드 생성 오류:', error);
@@ -369,25 +451,11 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
         <div className="p-6">
           {internalIsEditing ? (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* 이미지 미리보기 */}
-              {formData.imageUrl && isImageUrl(formData.imageUrl as string) && (
-                <div className="mb-6 text-center">
-                  <img
-                    src={formData.imageUrl as string}
-                    alt={`${formData.name} 이미지`}
-                    className="w-48 h-48 object-cover rounded-lg mx-auto border border-stone-300 shadow-sm"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                  <p className="text-sm text-stone-500 mt-2">제품 이미지 미리보기</p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {activeFields.map(field => (
+              {/* 핵심 필드 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {activeFields.filter(field => field.core).map(field => (
                   <div key={field.id} className="form-group">
-                    <label htmlFor={field.id} className="block text-sm font-medium text-stone-700">
+                    <label htmlFor={field.id} className="block text-sm font-medium text-stone-700 bg-stone-100 px-3 py-2 rounded-md mb-2">
                       {field.label} {field.required && <span className="text-red-500">*</span>}
                     </label>
                     {renderField(field)}
@@ -395,12 +463,41 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                 ))}
               </div>
 
-              {/* AI 스펙 생성기 */}
-              <div className="mt-6 p-4 bg-teal-50 border-l-4 border-teal-400 rounded-md">
-                <p className="font-bold text-teal-800">✨AI 스펙 생성기</p>
-                <p className="text-teal-700 text-sm mt-1">
-                  장비의 품명과 제조사를 입력하면 AI가 자동으로 주요 스펙과 세부 기능, 구성품을 {equipment ? '수정해' : '채워'}줍니다.
-                </p>
+              {/* 추가 필드 (하향 배치) */}
+              <div className="space-y-6">
+                {/* 이미지 미리보기 */}
+                {formData.imageUrl && isImageUrl(formData.imageUrl as string) && (
+                  <div className="text-center">
+                    <img
+                      src={formData.imageUrl as string}
+                      alt={`${formData.name} 이미지`}
+                      className="w-48 h-48 object-cover rounded-lg mx-auto border border-stone-300 shadow-sm"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                    <p className="text-sm text-stone-500 mt-2">제품 이미지 미리보기</p>
+                  </div>
+                )}
+
+                {/* 추가 필드들 */}
+                <div className="grid grid-cols-1 gap-4">
+                  {activeFields.filter(field => !field.core).map(field => (
+                    <div key={field.id} className="form-group">
+                      <label htmlFor={field.id} className="block text-sm font-medium text-stone-700">
+                        {field.label} {field.required && <span className="text-red-500">*</span>}
+                      </label>
+                      {renderField(field)}
+                    </div>
+                  ))}
+                </div>
+
+                {/* AI 스펙 생성기 */}
+                <div className="p-4 bg-teal-50 border-l-4 border-teal-400 rounded-md">
+                  <p className="font-bold text-teal-800">✨AI 스펙 생성기</p>
+                  <p className="text-teal-700 text-sm mt-1">
+                    장비의 품명과 제조사를 입력하면 AI가 자동으로 주요 스펙과 세부 기능, 구성품을 {equipment ? '수정해' : '채워'}줍니다.
+                  </p>
                   
                   {/* API 키 입력 섹션 */}
                   {showApiKeyInput && (
@@ -457,25 +554,26 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                   {aiError && (
                     <p className="text-red-500 text-sm mt-2">{aiError}</p>
                   )}
-              </div>
-
-              {/* QR코드 미리보기 */}
-              {qrCodePreview && (
-                <div className="flex justify-center mt-6">
-                  <div className="bg-white p-4 rounded-lg border-2 border-dashed border-stone-300 text-center">
-                    <img 
-                      src={qrCodePreview} 
-                      alt="QR Code Preview" 
-                      className="mx-auto mb-2"
-                      style={{ width: '150px', height: '150px' }}
-                    />
-                    <p className="text-xs text-stone-500">
-                      QR코드 미리보기<br/>
-                      등록/수정 시 자동 다운로드됩니다
-                    </p>
-                  </div>
                 </div>
-              )}
+
+                {/* QR코드 미리보기 */}
+                {qrCodePreview && (
+                  <div className="flex justify-center">
+                    <div className="bg-white p-4 rounded-lg border-2 border-dashed border-stone-300 text-center">
+                      <img 
+                        src={qrCodePreview} 
+                        alt="QR Code Preview" 
+                        className="mx-auto mb-2"
+                        style={{ width: '150px', height: '150px' }}
+                      />
+                      <p className="text-xs text-stone-500">
+                        QR코드 미리보기<br/>
+                        등록/수정 시 자동 다운로드됩니다
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center gap-4 mt-6">
                 <button
@@ -511,8 +609,9 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {activeFields.map(field => {
+              {/* 핵심 필드 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {activeFields.filter(field => field.core).map(field => {
                   if (field.name === 'imageUrl' && equipment?.imageUrl && isImageUrl(equipment.imageUrl)) {
                     return null; // 이미지는 위에 표시했으므로 제외
                   }
@@ -536,7 +635,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
 
                   return (
                     <div key={field.id}>
-                      <p className="font-semibold text-stone-700">{field.label}</p>
+                      <p className="font-semibold text-stone-700 bg-stone-100 px-3 py-2 rounded-md mb-2">{field.label}</p>
                       <p className="text-stone-500">
                         {field.type === 'url' && value !== '정보 없음' ? (
                           <a 
@@ -554,6 +653,52 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                     </div>
                   );
                 })}
+              </div>
+
+              {/* 추가 필드 (하향 배치) */}
+              <div className="space-y-6">
+                {/* 추가 필드들 */}
+                <div className="grid grid-cols-1 gap-6">
+                  {activeFields.filter(field => !field.core).map(field => {
+                    if (field.name === 'imageUrl' && equipment?.imageUrl && isImageUrl(equipment.imageUrl)) {
+                      return null; // 이미지는 위에 표시했으므로 제외
+                    }
+
+                    const value = equipment?.[field.name] || '정보 없음';
+                    
+                    const formattedValue = field.type === 'number' ? 
+                      (value as number).toLocaleString() : 
+                      field.type === 'url' ? 
+                        `${value}` :
+                      field.type === 'date' && value !== '정보 없음' ?
+                        new Date(value as string).toLocaleDateString('ko-KR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        }) :
+                        Array.isArray(value) ? value.join(', ') : value;
+
+                    return (
+                      <div key={field.id}>
+                        <p className="font-semibold text-stone-700 bg-stone-100 px-3 py-2 rounded-md mb-2">{field.label}</p>
+                        <p className="text-stone-500">
+                          {field.type === 'url' && value !== '정보 없음' ? (
+                            <a 
+                              href={value as string} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              {value as string}
+                            </a>
+                          ) : (
+                            formattedValue
+                          )}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

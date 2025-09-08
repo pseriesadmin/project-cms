@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Equipment, EquipmentLogEntry, FormField, VersionHistory } from '../types';
+import { useRealtimeBackup } from './useRealtimeBackup';
 
 // 초기 데이터
 const initialEquipmentData: Equipment[] = [
@@ -23,7 +24,7 @@ const initialEquipmentData: Equipment[] = [
 // 기본 폼 필드
 const defaultFormFields: FormField[] = [
   { id: "reg-registration-date", label: "등록일시", name: "registrationDate", type: "date", required: true, disabledOnEdit: false, group: "main", active: true, core: true },
-  { id: "reg-code", label: "장비 코드", name: "code", type: "text", required: true, disabledOnEdit: true, group: "main", active: true, core: true },
+  { id: "reg-code", label: "장비 코드", name: "code", type: "text", required: true, disabledOnEdit: false, group: "main", active: true, core: true },
   { id: "reg-name", label: "품명", name: "name", type: "text", required: true, group: "main", active: true, core: true },
   { id: "reg-category", label: "카테고리", name: "category", type: "text", required: true, group: "main", active: true, core: true },
   { id: "reg-manufacturer", label: "제조사", name: "manufacturer", type: "text", required: true, group: "main", active: true, core: true },
@@ -67,8 +68,8 @@ const ensureCoreFields = (fields: FormField[]): FormField[] => {
   
   // 핵심 필드가 누락된 경우 추가
   coreFields.forEach(coreField => {
-    const existingField = result.find(field => field.name === coreField.name);
-    if (!existingField) {
+    const existingFieldIndex = result.findIndex(field => field.name === coreField.name);
+    if (existingFieldIndex === -1) {
       // 핵심 필드를 적절한 위치에 삽입 (등록일시는 맨 앞에)
       if (coreField.name === 'registrationDate') {
         result.unshift(coreField);
@@ -76,10 +77,26 @@ const ensureCoreFields = (fields: FormField[]): FormField[] => {
         result.push(coreField);
       }
       console.log(`🔧 핵심 필드 복원: ${coreField.label}`);
-    } else if (existingField && !existingField.core) {
-      // 기존 필드가 있지만 core 속성이 false인 경우 복원
-      existingField.core = true;
-      console.log(`🔧 핵심 필드 속성 복원: ${existingField.label}`);
+    } else {
+      // 기존 필드가 있는 경우 핵심 속성들을 기본값으로 업데이트
+      const existingField = result[existingFieldIndex];
+      const updatedField = {
+        ...existingField,
+        core: true,
+        required: coreField.required,
+        disabledOnEdit: coreField.disabledOnEdit, // 🔧 disabledOnEdit 속성 강제 업데이트
+        active: existingField.active !== false ? true : existingField.active // active는 사용자 설정 유지
+      };
+      
+      // 변경사항이 있는 경우에만 로그 출력
+      if (JSON.stringify(existingField) !== JSON.stringify(updatedField)) {
+        console.log(`🔧 핵심 필드 속성 업데이트: ${existingField.label}`, {
+          이전: { core: existingField.core, disabledOnEdit: existingField.disabledOnEdit },
+          변경후: { core: updatedField.core, disabledOnEdit: updatedField.disabledOnEdit }
+        });
+      }
+      
+      result[existingFieldIndex] = updatedField;
     }
   });
   
@@ -87,11 +104,43 @@ const ensureCoreFields = (fields: FormField[]): FormField[] => {
 };
 
 export const useEquipmentData = () => {
-  const [equipmentData, setEquipmentData] = useState<Equipment[]>([]);
+  // localStorage에서 초기 데이터 로드
+  const getInitialEquipmentData = (): Equipment[] => {
+    try {
+      const savedData = localStorage.getItem('equipmentData');
+      if (savedData) {
+        const parsedData = JSON.parse(savedData);
+        console.log('🔄 useState 초기화 시 localStorage에서 데이터 로드:', parsedData.length);
+        return parsedData;
+      }
+    } catch (error) {
+      console.error('🚨 초기 데이터 로드 실패:', error);
+    }
+    return [];
+  };
+
+  const [equipmentData, setEquipmentData] = useState<Equipment[]>(getInitialEquipmentData);
   const [logData, setLogData] = useState<EquipmentLogEntry[]>([]);
   const [logArchive, setLogArchive] = useState<any[]>([]);
   const [formFields, setFormFields] = useState<FormField[]>(defaultFormFields);
   const [isFirstRun, setIsFirstRun] = useState(true);
+
+  // 실시간 백업 시스템 통합
+  const {
+    saveToCloud: cloudSave,
+    restoreFromCloud: cloudRestore,
+    backupState,
+    isOnline
+  } = useRealtimeBackup<{
+    equipmentData: Equipment[];
+    logData: EquipmentLogEntry[];
+    logArchive: any[];
+    formFields: FormField[];
+  }>({
+    dataType: 'equipment',
+    userId: localStorage.getItem('userId') || 'anonymous',
+    autoSaveInterval: 45000 // 45초마다 자동 백업
+  });
 
   // localStorage 키
   const STORAGE_KEYS = {
@@ -155,11 +204,19 @@ export const useEquipmentData = () => {
         const mergedFormFields = ensureCoreFields(parsedFormFields);
         setFormFields(mergedFormFields);
         
-        // 핵심 필드가 추가된 경우 localStorage 업데이트
-        if (mergedFormFields.length !== parsedFormFields.length) {
+        // 핵심 필드가 추가되거나 속성이 변경된 경우 localStorage 업데이트
+        const hasChanges = mergedFormFields.length !== parsedFormFields.length || 
+                          JSON.stringify(mergedFormFields) !== JSON.stringify(parsedFormFields);
+        
+        if (hasChanges) {
           localStorage.setItem(STORAGE_KEYS.formFields, JSON.stringify(mergedFormFields));
-          console.log('🔄 핵심 필드 자동 복구 완료');
+          console.log('🔄 핵심 필드 자동 복구 및 속성 업데이트 완료');
         }
+      } else {
+        // localStorage에 저장된 formFields가 없는 경우 기본값 사용
+        console.log('🔄 기본 formFields 사용 및 저장');
+        setFormFields(defaultFormFields);
+        localStorage.setItem(STORAGE_KEYS.formFields, JSON.stringify(defaultFormFields));
       }
       
       console.groupEnd();
@@ -169,15 +226,49 @@ export const useEquipmentData = () => {
     }
   }, []);
 
-  // 데이터 저장
+  // 데이터 저장 (로컬 + 클라우드)
   const saveData = useCallback((data: Equipment[]) => {
+    console.log('🔍 [DEBUG] saveData 시작');
+    console.log('🔍 [DEBUG] 저장할 데이터 길이:', data.length);
+    console.log('🔍 [DEBUG] 저장할 데이터:', data);
+    
     try {
-      localStorage.setItem(STORAGE_KEYS.equipmentData, JSON.stringify(data));
+      const jsonData = JSON.stringify(data);
+      console.log('🔍 [DEBUG] JSON 직렬화 성공, 크기:', jsonData.length);
+      
+      localStorage.setItem(STORAGE_KEYS.equipmentData, jsonData);
+      console.log('🔍 [DEBUG] localStorage 저장 성공');
+      
+      // 저장 검증
+      const savedData = localStorage.getItem(STORAGE_KEYS.equipmentData);
+      const parsedSavedData = savedData ? JSON.parse(savedData) : [];
+      console.log('🔍 [DEBUG] 저장 검증 - 실제 저장된 데이터 길이:', parsedSavedData.length);
+      console.log('🔍 [DEBUG] 저장 검증 - 실제 저장된 데이터:', parsedSavedData);
+      
+      // 중요: setEquipmentData 호출 전후 상태 확인
+      console.log('🔍 [DEBUG] setEquipmentData 호출 전 현재 상태 길이:', equipmentData.length);
       setEquipmentData(data);
+      console.log('🔍 [DEBUG] setEquipmentData 호출 완료 - 새로운 데이터 길이:', data.length);
+      
+      // 상태 업데이트 확인을 위한 지연 검증
+      setTimeout(() => {
+        console.log('🔍 [DEBUG] 상태 업데이트 확인 - 현재 equipmentData.length:', equipmentData.length);
+      }, 50);
+      
+      // 실시간 클라우드 백업
+      const backupData = {
+        equipmentData: data,
+        logData,
+        logArchive,
+        formFields
+      };
+      cloudSave(backupData);
+      console.log('🔍 [DEBUG] 클라우드 백업 호출 완료');
     } catch (error) {
-      console.error("Failed to save data to localStorage:", error);
+      console.error("🚨 [DEBUG] saveData 실패:", error);
+      alert('데이터 저장에 실패했습니다: ' + error);
     }
-  }, []);
+  }, [logData, logArchive, formFields, cloudSave, equipmentData.length]);
 
   // 로그 저장
   const saveLog = useCallback((logs: EquipmentLogEntry[]) => {
@@ -283,9 +374,32 @@ export const useEquipmentData = () => {
 
   // 장비 추가
   const addEquipment = useCallback((equipment: Equipment) => {
+    console.log('🔍 [DEBUG] addEquipment 시작');
+    console.log('🔍 [DEBUG] 현재 equipmentData.length:', equipmentData.length);
+    console.log('🔍 [DEBUG] 현재 equipmentData:', equipmentData);
+    console.log('🔍 [DEBUG] 추가할 장비:', equipment);
+    
     const newData = [...equipmentData, equipment];
+    console.log('🔍 [DEBUG] 새로운 데이터 배열 length:', newData.length);
+    console.log('🔍 [DEBUG] 새로운 데이터 배열:', newData);
+    
+    // 상태 업데이트 전 localStorage 확인
+    const beforeStorage = localStorage.getItem('equipmentData');
+    const beforeData = beforeStorage ? JSON.parse(beforeStorage) : [];
+    console.log('🔍 [DEBUG] 저장 전 localStorage 데이터 수:', beforeData.length);
+    
     saveData(newData);
     logDetailedChange('추가', equipment.code, null, equipment);
+    
+    // 상태 업데이트 후 localStorage 확인
+    setTimeout(() => {
+      const afterStorage = localStorage.getItem('equipmentData');
+      const afterData = afterStorage ? JSON.parse(afterStorage) : [];
+      console.log('🔍 [DEBUG] 저장 후 localStorage 데이터 수:', afterData.length);
+      console.log('🔍 [DEBUG] 저장 후 localStorage 데이터:', afterData);
+    }, 100);
+    
+    console.log('🔍 [DEBUG] addEquipment 완료');
   }, [equipmentData, saveData, logDetailedChange]);
 
   // 장비 수정
@@ -352,6 +466,11 @@ export const useEquipmentData = () => {
     saveFormFields,
     logDetailedChange,
     loadData,
-    VERSION_HISTORY
+    VERSION_HISTORY,
+    // 실시간 백업 관련
+    cloudBackup: cloudSave,
+    cloudRestore,
+    isOnline,
+    backupState
   };
 };
