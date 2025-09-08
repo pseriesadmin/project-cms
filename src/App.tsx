@@ -3,7 +3,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { ProjectPhaseCard } from './components/ProjectPhaseCard';
 import { initialData } from './data/initialData';
 import type { ProjectPhase, Task, ProjectData, ChecklistItem, PerformanceRecord } from './types';
-import { CrazyshotLogo, DownloadIcon, UploadIcon, PlusIcon, SaveIcon } from './components/icons';
+import { CrazyshotLogo, DownloadIcon, UploadIcon, PlusIcon, SaveIcon, CloudUploadIcon, CloudDownloadIcon } from './components/icons';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChangeLogDisplay } from './components/ChangeLogDisplay';
 import { LogModal } from './components/LogModal';
@@ -62,7 +62,9 @@ const App: React.FC = () => {
     updateProjectData, 
     lastSyncTime,
     isOnline,
-    backupState
+    backupState,
+    cloudBackup,
+    cloudRestore
   } = useProjectSync(initialData);
 
   // 사용되지 않는 변수 참조 (lint 경고 해결)
@@ -327,6 +329,73 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCloudBackup = async () => {
+    // 개발 환경 경고 모달
+    const confirmBackup = window.confirm(`
+🚨 개발 환경 클라우드 백업 경고 🚨
+
+현재 로컬 개발 환경에서는 클라우드 백업의 실제 기능이 제한적입니다:
+
+✔️ 임시 데이터 저장만 가능
+❌ 실제 클라우드 스토리지에 저장되지 않음
+❌ 데이터의 영구 보존 미보장
+
+계속 진행하시겠습니까?
+    `);
+
+    if (!confirmBackup) return;
+
+    try {
+      await cloudBackup(projectData);
+      alert('🔄 개발 환경 임시 백업이 완료되었습니다.');
+    } catch (error) {
+      console.error('클라우드 백업 실패:', error);
+      alert('클라우드 백업 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleCloudRestore = async () => {
+    // 개발 환경 경고 모달
+    const confirmRestore = window.confirm(`
+🚨 개발 환경 클라우드 복원 경고 🚨
+
+현재 로컬 개발 환경에서는 클라우드 복원의 실제 기능이 제한적입니다:
+
+✔️ 임시 데이터 복원 가능
+❌ 실제 클라우드 데이터 복원 아님
+❌ 데이터의 신뢰성 보장 없음
+
+계속 진행하시겠습니까?
+    `);
+
+    if (!confirmRestore) return;
+
+    try {
+      const restoredData = await cloudRestore();
+      if (restoredData) {
+        const restoredDataWithLog = {
+          ...restoredData,
+          logs: [
+            ...(restoredData.logs || []),
+            {
+              timestamp: getTimestamp(),
+              message: '🔄 개발 환경 임시 데이터 복원 완료',
+            }
+          ]
+        };
+
+        updateProjectData(draft => {
+          Object.assign(draft, restoredDataWithLog);
+        });
+
+        alert('🔄 개발 환경에서 임시 데이터를 복원했습니다.');
+      }
+    } catch (error) {
+      console.error('클라우드 복원 실패:', error);
+      alert('클라우드 백업에서 데이터를 복원할 수 없습니다.');
+    }
+  };
+
   const handleRestoreClick = () => {
     fileInputRef.current?.click();
   };
@@ -524,6 +593,12 @@ const App: React.FC = () => {
                                 실시간으로 프로젝트 각 분야 별 업무현황을 기록하고 공유하세요.
                             </p>
                             <div className="flex items-center gap-2">
+                                <button onClick={handleCloudBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
+                                    <CloudUploadIcon className="w-4 h-4" /> 클라우드 백업
+                                </button>
+                                <button onClick={handleCloudRestore} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
+                                    <CloudDownloadIcon className="w-4 h-4" /> 클라우드 복원
+                                </button>
                                 <button onClick={handleBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
                                     <SaveIcon className="w-4 h-4" /> 정보 백업
                                 </button>
