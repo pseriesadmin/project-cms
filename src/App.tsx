@@ -330,24 +330,9 @@ const App: React.FC = () => {
   };
 
   const handleCloudBackup = async () => {
-    // 개발 환경 경고 모달
-    const confirmBackup = window.confirm(`
-🚨 개발 환경 클라우드 백업 경고 🚨
-
-현재 로컬 개발 환경에서는 클라우드 백업의 실제 기능이 제한적입니다:
-
-✔️ 임시 데이터 저장만 가능
-❌ 실제 클라우드 스토리지에 저장되지 않음
-❌ 데이터의 영구 보존 미보장
-
-계속 진행하시겠습니까?
-    `);
-
-    if (!confirmBackup) return;
-
     try {
       await cloudBackup(projectData);
-      alert('🔄 개발 환경 임시 백업이 완료되었습니다.');
+      alert('클라우드 백업이 완료되었습니다.');
     } catch (error) {
       console.error('클라우드 백업 실패:', error);
       alert('클라우드 백업 중 오류가 발생했습니다.');
@@ -355,21 +340,6 @@ const App: React.FC = () => {
   };
 
   const handleCloudRestore = async () => {
-    // 개발 환경 경고 모달
-    const confirmRestore = window.confirm(`
-🚨 개발 환경 클라우드 복원 경고 🚨
-
-현재 로컬 개발 환경에서는 클라우드 복원의 실제 기능이 제한적입니다:
-
-✔️ 임시 데이터 복원 가능
-❌ 실제 클라우드 데이터 복원 아님
-❌ 데이터의 신뢰성 보장 없음
-
-계속 진행하시겠습니까?
-    `);
-
-    if (!confirmRestore) return;
-
     try {
       const restoredData = await cloudRestore();
       if (restoredData) {
@@ -379,7 +349,7 @@ const App: React.FC = () => {
             ...(restoredData.logs || []),
             {
               timestamp: getTimestamp(),
-              message: '🔄 개발 환경 임시 데이터 복원 완료',
+              message: '클라우드 백업에서 데이터가 성공적으로 복원되었습니다.',
             }
           ]
         };
@@ -388,7 +358,7 @@ const App: React.FC = () => {
           Object.assign(draft, restoredDataWithLog);
         });
 
-        alert('🔄 개발 환경에서 임시 데이터를 복원했습니다.');
+        alert('클라우드 백업에서 데이터를 성공적으로 복원했습니다.');
       }
     } catch (error) {
       console.error('클라우드 복원 실패:', error);
