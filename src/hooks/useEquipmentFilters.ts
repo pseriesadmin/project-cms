@@ -22,7 +22,13 @@ export const useEquipmentFilters = (equipmentData: Equipment[]) => {
                            item.code.toLowerCase().includes(state.searchQuery.toLowerCase());
       
       return matchesCategory && matchesManufacturer && matchesPrice && matchesSearch;
-    }).reverse(); // 최근 등록 순서로 정렬
+    }).sort((a, b) => {
+      // 등록일시 기준으로 최신순 정렬 (등록일시가 없으면 배열 끝으로)
+      if (!a.registrationDate && !b.registrationDate) return 0;
+      if (!a.registrationDate) return 1;
+      if (!b.registrationDate) return -1;
+      return new Date(b.registrationDate).getTime() - new Date(a.registrationDate).getTime();
+    });
   }, [equipmentData, state]);
 
   // 페이지네이션 데이터

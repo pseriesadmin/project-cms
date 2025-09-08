@@ -25,8 +25,7 @@ export const EquipmentFilters: React.FC<EquipmentFiltersProps> = ({
   onResetFilters
 }) => {
   return (
-    <section className="bg-white p-6 rounded-lg shadow-sm mb-8">
-      <h2 className="text-xl font-bold mb-4 text-stone-800">장비 필터</h2>
+    <section>
       <div className="flex flex-col md:flex-row md:items-center gap-6">
         {/* 카테고리 필터 */}
         <div>
@@ -86,44 +85,8 @@ export const EquipmentFilters: React.FC<EquipmentFiltersProps> = ({
         </div>
       </div>
 
-      {/* 검색바 */}
-      <div className="mt-6">
-        <label className="font-semibold text-stone-600">검색</label>
-        <div className="flex items-center gap-2 mt-2">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="품명 또는 장비 코드로 검색..."
-              value={state.searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full rounded-md border-stone-300 shadow-sm p-2 pr-10 text-sm"
-            />
-            {state.searchQuery && (
-              <button
-                onClick={onClearSearch}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                title="검색 지우기"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-          {state.searchQuery && (
-            <button
-              onClick={onClearSearch}
-              className="px-3 py-2 bg-gray-500 text-white text-sm font-medium rounded-md hover:bg-gray-600 transition-colors duration-200 whitespace-nowrap"
-              title="전체 목록 보기"
-            >
-              전체
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* 필터 리셋 버튼 */}
-      <div className="mt-4">
+      <div className="mt-6">
         <button
           onClick={onResetFilters}
           className="px-4 py-2 bg-stone-500 text-white text-sm font-medium rounded-md hover:bg-stone-600 transition-colors duration-200"
@@ -134,3 +97,4 @@ export const EquipmentFilters: React.FC<EquipmentFiltersProps> = ({
     </section>
   );
 };
+

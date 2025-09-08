@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { EquipmentLogEntry } from '../../types';
-import { useEquipmentExport } from '../../hooks/useEquipmentExport';
 
 interface EquipmentLogTableProps {
   logData: EquipmentLogEntry[];
@@ -12,11 +11,6 @@ export const EquipmentLogTable: React.FC<EquipmentLogTableProps> = ({
   logArchive
 }) => {
   const [showAllLogs, setShowAllLogs] = useState(false);
-  const { exportLogToCSV } = useEquipmentExport();
-
-  const handleExportLog = () => {
-    exportLogToCSV(logData, logArchive);
-  };
 
   const allLogs = React.useMemo(() => {
     const combined = [...logData];
@@ -37,20 +31,12 @@ export const EquipmentLogTable: React.FC<EquipmentLogTableProps> = ({
     <section className="bg-white p-6 rounded-lg shadow-sm mb-8">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold text-stone-800">장비 변경 로그</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowAllLogs(!showAllLogs)}
-            className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 transition-colors duration-200 whitespace-nowrap"
-          >
-            {showAllLogs ? '최근 로그만 보기' : '전체 로그 보기'} 📋
-          </button>
-          <button
-            onClick={handleExportLog}
-            className="px-4 py-2 bg-stone-500 text-white text-sm font-medium rounded-md hover:bg-stone-600 transition-colors duration-200 whitespace-nowrap"
-          >
-            로그 파일 다운로드 💾
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAllLogs(!showAllLogs)}
+          className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 transition-colors duration-200 whitespace-nowrap"
+        >
+          {showAllLogs ? '최근 로그만 보기' : '전체 로그 보기'} 📋
+        </button>
       </div>
       
       <p className="text-stone-500 mb-4 text-sm">

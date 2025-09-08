@@ -119,7 +119,17 @@ export const EquipmentTable: React.FC<EquipmentTableProps> = ({
             ) : (
               <tr>
                 <td colSpan={6} className="px-6 py-8 text-center text-stone-500">
-                  선택한 조건에 맞는 장비가 없습니다.
+                  {searchQuery ? (
+                    <div>
+                      <p>"{searchQuery}" 검색 결과가 없습니다.</p>
+                      <p className="text-sm mt-2">다른 검색어를 시도하거나 필터를 초기화해보세요.</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p>등록된 장비가 없습니다.</p>
+                      <p className="text-sm mt-2">새 장비를 등록하거나 필터 조건을 확인해보세요.</p>
+                    </div>
+                  )}
                 </td>
               </tr>
             )}
