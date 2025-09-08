@@ -8,8 +8,6 @@ interface EquipmentFiltersProps {
   onCategoryChange: (category: string) => void;
   onManufacturerChange: (manufacturer: string) => void;
   onPriceChange: (maxPrice: number) => void;
-  onSearchChange: (searchQuery: string) => void;
-  onClearSearch: () => void;
   onResetFilters: () => void;
 }
 
@@ -20,8 +18,6 @@ export const EquipmentFilters: React.FC<EquipmentFiltersProps> = ({
   onCategoryChange,
   onManufacturerChange,
   onPriceChange,
-  onSearchChange,
-  onClearSearch,
   onResetFilters
 }) => {
   return (

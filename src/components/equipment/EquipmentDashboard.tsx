@@ -362,8 +362,6 @@ export const EquipmentDashboard: React.FC = () => {
                 onCategoryChange={setCategory}
                 onManufacturerChange={setManufacturer}
                 onPriceChange={setMaxPrice}
-                onSearchChange={setSearchQuery}
-                onClearSearch={clearSearch}
                 onResetFilters={resetFilters}
               />
             </div>
