@@ -373,11 +373,11 @@ export const useEquipmentExport = () => {
             백업시간: restoredData.backupTime || '정보없음'
           });
           
-          // 로그 데이터 병합 로직 추가
-          const mergedLogData = [
-            ...(restoredData.logData || []),
-            ...(restoredData.logArchive?.flatMap(archive => archive.logs || []) || [])
-          ];
+           // 로그 데이터 병합 로직 추가
+           const mergedLogData = [
+             ...(restoredData.logData || []),
+             ...(restoredData.logArchive?.flatMap((archive: any) => archive.logs || []) || [])
+           ];
           
           resolve({
             equipmentData: restoredData.equipmentData || [],
