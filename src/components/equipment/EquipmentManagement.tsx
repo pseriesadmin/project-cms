@@ -61,10 +61,6 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     }
   };
 
-  const handleImportCSV = () => {
-    importFileRef.current?.click();
-  };
-
   const handleRestore = () => {
     restoreFileRef.current?.click();
   };
@@ -99,8 +95,8 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
         logDetailedChange('파일 복원', 'N/A', null, null);
         
         alert('파일에서 데이터가 성공적으로 복원되었습니다.');
-        // 페이지 새로고침으로 완전한 상태 업데이트
-        window.location.reload();
+        // 상태 동기화를 위한 storage 이벤트 트리거
+        window.dispatchEvent(new Event('storage'));
       } catch (error) {
         alert(error instanceof Error ? error.message : '데이터 복원에 실패했습니다.');
       }
@@ -120,8 +116,8 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
         logDetailedChange('클라우드 복원', 'N/A', null, null);
         
         alert('클라우드에서 데이터가 성공적으로 복원되었습니다.');
-        // 페이지 새로고침으로 완전한 상태 업데이트
-        window.location.reload();
+        // 상태 동기화를 위한 storage 이벤트 트리거
+        window.dispatchEvent(new Event('storage'));
       } catch (error) {
         alert(error instanceof Error ? error.message : '클라우드 복원에 실패했습니다.');
       }
@@ -151,16 +147,6 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
             <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
           </svg>
           양식 관리
-        </button>
-        
-        <button
-          onClick={handleImportCSV}
-          className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 transition-colors duration-200 whitespace-nowrap flex items-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-9.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-          </svg>
-          엑셀 입력
         </button>
         
         <button

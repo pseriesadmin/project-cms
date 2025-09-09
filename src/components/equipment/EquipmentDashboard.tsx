@@ -21,8 +21,6 @@ export const EquipmentDashboard: React.FC = () => {
     logData,
     logArchive,
     formFields,
-    isFirstRun,
-    setIsFirstRun,
     addEquipment,
     updateEquipment,
     deleteEquipment,
@@ -203,12 +201,6 @@ export const EquipmentDashboard: React.FC = () => {
     setEditingEquipment(null);
   };
 
-  // 첫 사용자 안내 모달 닫기
-  const handleCloseFirstTimeGuide = () => {
-    setIsFirstRun(false);
-    localStorage.setItem('equipment-dashboard-first-visit', 'true');
-  };
-
   // 다중 사용자 감지 시 스낵바 표시
   React.useEffect(() => {
     if (status.hasMultipleUsers && !showUserSnackbar) {
@@ -218,20 +210,11 @@ export const EquipmentDashboard: React.FC = () => {
     }
   }, [status.hasMultipleUsers, showUserSnackbar]);
 
-  // 최초 접속 여부 확인 및 설정
+  // 최초 접속 여부 확인 및 설정 (모달 비활성화)
   useEffect(() => {
-    const hasVisitedEquipmentDashboard = localStorage.getItem('equipment-dashboard-first-visit');
-    
-    if (!hasVisitedEquipmentDashboard) {
-      // 최초 접속이 확실한 경우에만 isFirstRun을 true로 설정
-      if (equipmentData.length === 1 && equipmentData[0].code === 'SAMPLE-001') {
-        setIsFirstRun(true);
-        localStorage.setItem('equipment-dashboard-first-visit', 'true');
-      }
-    } else {
-      setIsFirstRun(false);
-    }
-  }, [equipmentData]);
+    // 첫 실행 모달을 항상 비활성화
+    localStorage.setItem('equipment-dashboard-first-visit', 'true');
+  }, []);
 
   return (
     <div className="w-full bg-stone-100 text-stone-800 font-['Noto_Sans_KR','Inter',sans-serif]">
@@ -454,8 +437,8 @@ export const EquipmentDashboard: React.FC = () => {
           />
         )}
 
-        {/* 첫 사용자 안내 모달 */}
-        {isFirstRun && (
+        {/* 첫 사용자 안내 모달 제거됨 */}
+        {/* {isFirstRun && (
           <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 text-center">
               <h2 className="text-2xl font-bold text-stone-800 mb-4">
@@ -477,7 +460,7 @@ export const EquipmentDashboard: React.FC = () => {
               </button>
             </div>
           </div>
-        )}
+        )} */}
       </div>
     </div>
   );

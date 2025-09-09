@@ -58,12 +58,19 @@ export const useEquipmentExport = () => {
       const result = await response.json();
       
       if (result.success) {
-        // localStorage 복원
+        // localStorage 완전 복원
         if (result.data.geminiApiKey) {
           localStorage.setItem('geminiApiKey', result.data.geminiApiKey);
         }
         if (result.data.categoryCodes && Array.isArray(result.data.categoryCodes)) {
           localStorage.setItem('category-codes', JSON.stringify(result.data.categoryCodes));
+        }
+        // 로그 데이터 localStorage 복원 추가
+        if (result.data.logData) {
+          localStorage.setItem('logData', JSON.stringify(result.data.logData));
+        }
+        if (result.data.logArchive) {
+          localStorage.setItem('logArchive', JSON.stringify(result.data.logArchive));
         }
 
         console.log('✅ 클라우드 복원 완료:', result.backupId);
@@ -358,17 +365,29 @@ export const useEquipmentExport = () => {
           // 복원 완료 로그
           console.log('✅ 데이터 복원 완료:', {
             장비목록: restoredData.equipmentData?.length || 0,
-            로그: (restoredData.logData?.length || 0) + (restoredData.logArchive?.length || 0),
+            현재로그: restoredData.logData?.length || 0,
+            아카이브로그: restoredData.logArchive?.length || 0,
             양식항목: restoredData.formFields?.length || 0,
             분류코드: restoredData.categoryCodes?.length || 0,
             API키: restoredData.geminiApiKey ? '복원됨' : '없음',
             백업시간: restoredData.backupTime || '정보없음'
           });
           
+          // 로그 데이터 병합 로직 추가
+          const mergedLogData = [
+            ...(restoredData.logData || []),
+            ...(restoredData.logArchive?.flatMap(archive => archive.logs || []) || [])
+          ];
+          
           resolve({
             equipmentData: restoredData.equipmentData || [],
-            logData: restoredData.logData || [],
-            logArchive: restoredData.logArchive || [],
+            logData: mergedLogData.slice(0, 100), // 최근 100개 로그만 유지
+            logArchive: restoredData.logArchive ? 
+              [{
+                archivedAt: new Date().toISOString(),
+                logs: mergedLogData.slice(100)
+              }] : 
+              [],
             formFields: restoredData.formFields || [],
             categoryCodes: restoredData.categoryCodes || [],
             geminiApiKey: restoredData.geminiApiKey

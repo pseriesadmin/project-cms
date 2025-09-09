@@ -127,16 +127,15 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
 
       onSubmit(formData as Equipment);
       console.log('🔍 [DEBUG] onSubmit 호출 완료');
+      
+      // 수정 모드였다면 상세보기 모드로 자동 전환
+      if (equipment && internalIsEditing) {
+        setInternalIsEditing(false);
+        setFormData(formData); // 업데이트된 데이터로 새로고침
+      }
     } catch (error) {
       console.error('🚨 [DEBUG] EquipmentModal handleSubmit 에러:', error);
       alert('폼 제출 중 오류가 발생했습니다: ' + error);
-    }
-    
-    // QR코드 생성 (장비 코드가 있는 경우)
-    if (formData.code) {
-      setTimeout(() => {
-        generateQRCode(formData.code as string);
-      }, 500); // 약간의 지연 후 QR코드 생성
     }
   };
 
@@ -419,8 +418,9 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                   <img 
                     src={qrCodePreview} 
                     alt="QR Code" 
-                    className="w-16 h-16 border border-stone-300 rounded"
-                    title="제품 QR코드"
+                    className="w-16 h-16 border border-stone-300 rounded cursor-pointer hover:border-teal-500 transition-colors"
+                    title="컴릭하여 QR코드 다운로드"
+                    onClick={() => generateQRCode(equipment?.code || '')}
                   />
                 </div>
               )}
@@ -563,12 +563,14 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                       <img 
                         src={qrCodePreview} 
                         alt="QR Code Preview" 
-                        className="mx-auto mb-2"
+                        className="mx-auto mb-2 cursor-pointer hover:opacity-80 transition-opacity"
                         style={{ width: '150px', height: '150px' }}
+                        onClick={() => generateQRCode(formData.code as string)}
+                        title="컴릭하여 QR코드 다운로드"
                       />
                       <p className="text-xs text-stone-500">
                         QR코드 미리보기<br/>
-                        등록/수정 시 자동 다운로드됩니다
+                        컴릭하면 다운로드됩니다
                       </p>
                     </div>
                   </div>

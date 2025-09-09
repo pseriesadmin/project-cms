@@ -425,6 +425,17 @@ export const useEquipmentData = () => {
   // 초기화 시 데이터 로드
   useEffect(() => {
     loadData();
+    
+    // storage 이벤트 리스너 추가 (복원 시 상태 동기화)
+    const handleStorageChange = () => {
+      loadData();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [loadData]);
 
   // 버전 히스토리 로그 추가

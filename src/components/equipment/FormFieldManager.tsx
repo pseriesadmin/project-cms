@@ -248,9 +248,18 @@ export const FormFieldManager: React.FC<FormFieldManagerProps> = ({
     onClose();
   };
 
+  // 변경사항 확인 함수
+  const hasChanges = () => {
+    return JSON.stringify(fields) !== JSON.stringify(formFields);
+  };
+
   // 변경사항 취소
   const handleCancel = () => {
-    if (confirm('변경사항을 저장하지 않고 닫으시겠습니까?')) {
+    if (hasChanges()) {
+      if (confirm('변경사항을 저장하지 않고 닫으시겠습니까?')) {
+        onClose();
+      }
+    } else {
       onClose();
     }
   };
@@ -289,6 +298,10 @@ export const FormFieldManager: React.FC<FormFieldManagerProps> = ({
 
     const updatedCodes = [...categoryCodes, newCode];
     saveCategoryCodes(updatedCodes);
+    
+    // 로그 기록 추가
+    onLogChange('관리코드 추가', 'N/A', null, newCode, 'system');
+    
     setNewCategoryCode({ code: '', name: '' });
     alert('제품군 분류코드가 추가되었습니다.');
   };
@@ -300,6 +313,10 @@ export const FormFieldManager: React.FC<FormFieldManagerProps> = ({
     if (confirm(`'${code.name}' 코드를 삭제하시겠습니까?`)) {
       const updatedCodes = categoryCodes.filter(cc => cc.id !== id);
       saveCategoryCodes(updatedCodes);
+      
+      // 로그 기록 추가
+      onLogChange('관리코드 삭제', 'N/A', code, null, 'system');
+      
       alert('제품군 분류코드가 삭제되었습니다.');
     }
   };

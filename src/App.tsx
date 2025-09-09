@@ -39,7 +39,23 @@ const App: React.FC = () => {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [dataToRestore, setDataToRestore] = useState<ProjectData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('workflow');
+  // 탭 상태 복원 및 저장
+  const getInitialTab = (): TabId => {
+    try {
+      const savedTab = localStorage.getItem('activeTab');
+      return (savedTab as TabId) || 'workflow';
+    } catch {
+      return 'workflow';
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
+
+  // 탭 변경 시 localStorage에 저장
+  const handleTabChange = (tabId: TabId) => {
+    setActiveTab(tabId);
+    localStorage.setItem('activeTab', tabId);
+  };
   const [showUserSnackbar, setShowUserSnackbar] = useState(false);
   const [showActivitySnackbar, setShowActivitySnackbar] = useState(false);
 
@@ -201,12 +217,12 @@ const App: React.FC = () => {
 
   const downloadAsCSV = () => {
     try {
-      // CSV 헤더 생성
-      const headers = [
-        '워크플로우', '업무', '담당자', '일정', 
-        '체크포인트', '완료 여부', '성과 날짜', 
-        '성과 링크', '성과 코멘트', '이슈'
-      ];
+      // CSV 헤더 생성 (제거됨)
+      // const headers = [
+      //   '워크플로우', '업무', '담당자', '일정', 
+      //   '확인 조건', '완료 여부', '기간', 
+      //   '자료', '평가', '비고'
+      // ];
 
       // CSV 데이터 타입 정의
       type CSVRow = {
@@ -215,12 +231,12 @@ const App: React.FC = () => {
         업무: string;
         담당자: string;
         일정: string;
-        체크포인트: string;
+        '확인 조건': string;
         완료여부: string;
-        성과날짜: string;
-        성과링크: string;
-        성과코멘트: string;
-        이슈: string;
+        기간: string;
+        자료: string;
+        평가: string;
+        비고: string;
       };
 
       // CSV 데이터 생성
@@ -230,20 +246,20 @@ const App: React.FC = () => {
           업무: task.mainTask.join(', '),
           담당자: task.personInCharge,
           일정: task.schedule,
-          체크포인트: task.checkpoints.map(cp => cp.text).join('; '),
+          '확인 조건': task.checkpoints.map(cp => cp.text).join('; '),
           완료여부: task.checkpoints.map(cp => cp.completed ? '완료' : '미완료').join('; '),
-          성과날짜: task.performance.date,
-          성과링크: task.performance.docLink,
-          성과코멘트: task.performance.comment,
-          이슈: task.issues
+          기간: task.performance.date,
+          자료: task.performance.docLink,
+          평가: task.performance.comment,
+          비고: task.issues
         }))
       );
 
       // CSV 문자열 생성
       const csvString = [
-        headers.join(','),
+        Object.keys(csvData[0]).join(','),
         ...csvData.map(row => 
-          headers.map(header => {
+          Object.keys(row).map(header => {
             const value = row[header] || '';
             return `"${value.replace(/"/g, '""')}"`;
           }).join(',')
@@ -536,8 +552,8 @@ const App: React.FC = () => {
                 <div className="border-b border-slate-200 -mx-4 sm:-mx-8 px-4 sm:px-8">
                     <nav className="flex items-center justify-between" aria-label="Tabs">
                         <div className="flex">
-                            <TabButton tabId="workflow" title="개발 현황" activeTab={activeTab} setActiveTab={setActiveTab} />
-                            <TabButton tabId="dashboard" title="장비 현황" activeTab={activeTab} setActiveTab={setActiveTab} />
+                            <TabButton tabId="workflow" title="개발 현황" activeTab={activeTab} setActiveTab={handleTabChange} />
+                            <TabButton tabId="dashboard" title="장비 현황" activeTab={activeTab} setActiveTab={handleTabChange} />
                         </div>
                         <div className="flex items-center space-x-2">
                             <div className={`h-2 w-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
@@ -558,10 +574,10 @@ const App: React.FC = () => {
                 {activeTab === 'workflow' && (
                   <div className="space-y-8 overflow-y-auto max-h-[calc(100vh-12rem)]">
                     <header>
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-2">
-                            <p className="text-crazy-gray">
-                                실시간으로 프로젝트 각 분야 별 업무현황을 기록하고 공유하세요.
-                            </p>
+                        <p className="text-crazy-gray mb-4">
+                            실시간으로 프로젝트 각 분야 별 업무현황을 기록하고 공유하세요.
+                        </p>
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 mb-4 shadow-sm">
                             <div className="flex items-center gap-2">
                                 <button onClick={handleCloudBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
                                     <CloudUploadIcon className="w-4 h-4" /> 클라우드 백업
