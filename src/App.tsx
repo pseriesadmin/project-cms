@@ -67,6 +67,13 @@ const App: React.FC = () => {
     hasMultipleUsers 
   } = useUserSession();
 
+  console.log(`🏠 [App] useUserSession 호출 결과:`, {
+    activeUsers,
+    hasMultipleUsers,
+    recentActionsCount: recentActions.length,
+    현재시간: new Date().toISOString()
+  });
+
   const status = { 
     hasMultipleUsers, 
     activeUserCount: activeUsers.count 
@@ -91,7 +98,7 @@ const App: React.FC = () => {
   // 사용되지 않는 변수 참조 (lint 경고 해결)
   useEffect(() => {
     if (lastSyncTime) {
-      console.log('마지막 동기화 시간:', lastSyncTime);
+      // 마지막 동기화 시간 추적
     }
   }, [lastSyncTime]);
 
@@ -118,14 +125,16 @@ const App: React.FC = () => {
 
   // 다중 사용자 감지 시 강화된 경고 표시
   useEffect(() => {
-    console.log(`🔍 다중 사용자 상태 체크:`, {
+    console.log(`🚨 [App] 다중 사용자 알림 useEffect 실행:`, {
       hasMultipleUsers: status.hasMultipleUsers,
       activeUserCount: status.activeUserCount,
-      showUserSnackbar
+      showUserSnackbar,
+      조건충족: status.hasMultipleUsers && !showUserSnackbar,
+      시간: new Date().toISOString()
     });
     
     if (status.hasMultipleUsers && !showUserSnackbar) {
-      console.log('🚨 다중 사용자 감지! 경고 스낵바 표시');
+      console.log(`📢 [App] 다중 사용자 감지! 경고 스낵바 표시 시작`);
       setShowUserSnackbar(true);
       // 지속적 표시 (수동 닫기 필요)
     }
@@ -196,7 +205,7 @@ const App: React.FC = () => {
       if (phaseIndex === -1) return;
       const [removedPhase] = draft.projectPhases.splice(phaseIndex, 1);
       // 삭제된 워크플로우 이름 사용 (lint 경고 해결)
-      console.log(`삭제된 워크플로우: ${removedPhase.title}`);
+      void removedPhase.title;
     });
     setPhaseToDelete(null);
   }, [phaseToDelete, updateProjectData, confirmDataChange]);
@@ -242,7 +251,7 @@ const App: React.FC = () => {
       if (taskIndex === -1) return;
       const [removedTask] = phase.tasks.splice(taskIndex, 1);
       // 삭제된 업무 이름 사용 (lint 경고 해결)
-      console.log(`삭제된 업무: ${removedTask.mainTask.join(', ')}`);
+      void removedTask.mainTask;
     });
     setTaskToDelete(null);
   }, [taskToDelete, updateProjectData]);
@@ -316,7 +325,6 @@ const App: React.FC = () => {
 
       alert('엑셀 내보내기가 완료되었습니다.');
     } catch (error) {
-      console.error('CSV 내보내기 중 오류:', error);
       alert('엑셀 내보내기에 실패했습니다.');
     }
   };
@@ -344,18 +352,15 @@ const App: React.FC = () => {
           await writable.write(dataStr);
           await writable.close();
 
-          console.log(`✅ 백업 완료: ${fileName}`);
           alert(`✅ 개발현황 데이터가 ${fileName}으로 성공적으로 백업되었습니다.`);
           return;
         } catch (error: any) {
           // 사용자가 취소한 경우 (AbortError 또는 NotAllowedError)
           if (error.name === 'AbortError' || error.name === 'NotAllowedError') {
-            console.log('사용자가 백업을 취소했습니다.');
             return; // 취소 시 아무것도 하지 않음
           }
           
           // 실제 오류 발생 시에만 폴백 다운로드 실행
-          console.log('디렉토리 선택 중 오류 발생, 기본 다운로드 실행:', error);
         }
       }
 
@@ -369,10 +374,8 @@ const App: React.FC = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(link.href);
       
-      console.log(`✅ 백업 완료 (다운로드): ${fileName}`);
       alert(`✅ 개발현황 데이터가 ${fileName}으로 성공적으로 백업되었습니다.`);
     } catch (error) {
-      console.error("Failed to create backup file:", error);
       alert("정보를 백업하는 데 실패했습니다.");
     }
   };
@@ -382,7 +385,6 @@ const App: React.FC = () => {
       await cloudBackup(projectData);
       alert('클라우드 백업이 완료되었습니다.');
     } catch (error) {
-      console.error('클라우드 백업 실패:', error);
       alert('클라우드 백업 중 오류가 발생했습니다.');
     }
   };
@@ -409,7 +411,6 @@ const App: React.FC = () => {
         alert('클라우드 백업에서 데이터를 성공적으로 복원했습니다.');
       }
     } catch (error) {
-      console.error('클라우드 복원 실패:', error);
       alert('클라우드 백업에서 데이터를 복원할 수 없습니다.');
     }
   };
@@ -419,10 +420,6 @@ const App: React.FC = () => {
   };
 
   const sanitizeAndUpgradeData = (parsedJson: any): ProjectData => {
-    console.log('Raw parsed JSON:', parsedJson);
-    console.log('Parsed JSON type:', typeof parsedJson);
-    console.log('Is array:', Array.isArray(parsedJson));
-    console.log('Has projectPhases:', parsedJson && parsedJson.projectPhases);
 
     let rawPhases: any[];
     let rawLogs: any[] = [];
@@ -435,11 +432,9 @@ const App: React.FC = () => {
         rawPhases = parsedJson.projectPhases;
         rawLogs = Array.isArray(parsedJson.logs) ? parsedJson.logs : [];
       } else {
-        console.error('Unexpected JSON structure:', parsedJson);
         throw new Error("지원되지 않는 백업 파일 형식입니다. 파일 구조가 손상되었을 수 있습니다.");
       }
     } else {
-      console.error('Invalid JSON structure:', parsedJson);
       throw new Error("지원되지 않는 백업 파일 형식입니다. 파일 구조가 손상되었을 수 있습니다.");
     }
 
@@ -474,9 +469,6 @@ const App: React.FC = () => {
       };
     });
 
-    console.log('Sanitized Phases:', sanitizedPhases);
-    console.log('Raw Logs:', rawLogs);
-
     return { projectPhases: sanitizedPhases, logs: rawLogs };
   };
 
@@ -490,7 +482,6 @@ const App: React.FC = () => {
     }
     const reader = new FileReader();
     reader.onerror = () => {
-      console.error('파일 읽기 오류:', reader.error);
       alert('파일을 읽는 도중 오류가 발생했습니다.');
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
@@ -502,10 +493,8 @@ const App: React.FC = () => {
         }
         const parsedJson = JSON.parse(text);
         const dataToRestoreFromFile = sanitizeAndUpgradeData(parsedJson);
-        console.log('복원할 데이터:', dataToRestoreFromFile);
         setDataToRestore(dataToRestoreFromFile);
       } catch (error) {
-        console.error('파일 복원 중 오류:', error);
         alert(`파일을 복원하는 데 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
       } finally {
         if (fileInputRef.current) {
@@ -518,7 +507,6 @@ const App: React.FC = () => {
 
   const confirmRestore = useCallback(() => {
     if (!dataToRestore) {
-      console.error('복원할 데이터가 없습니다.');
       return;
     }
     try {
@@ -532,7 +520,6 @@ const App: React.FC = () => {
           }
         ]
       };
-      console.log('복원된 데이터:', restoredDataWithLog);
       
       // 올바른 방식으로 데이터 복원
       updateProjectData(draft => {
@@ -542,7 +529,6 @@ const App: React.FC = () => {
       setDataToRestore(null);
       alert('데이터 복원이 완료되었습니다.');
     } catch (error) {
-      console.error('데이터 복원 중 오류:', error);
       alert(`데이터 복원 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     }
   }, [dataToRestore, updateProjectData, getTimestamp]);
@@ -552,6 +538,43 @@ const App: React.FC = () => {
     alert('복원 작업이 취소되었습니다.');
   }, []);
 
+  // 개발용: 로컬 스토리지 초기화 함수
+  const clearLocalStorage = useCallback(() => {
+    if (window.confirm('⚠️ 로컬 스토리지의 모든 데이터를 삭제하고 초기 상태로 리셋하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.')) {
+      try {
+        // 삭제 전 현재 상태 로깅
+        console.log('🔍 삭제 전 로컬 스토리지 상태:', {
+          crazyshot_project_data: localStorage.getItem('crazyshot_project_data'),
+          project_version: localStorage.getItem('project_version'),
+          activeTab: localStorage.getItem('activeTab')
+        });
+        
+        localStorage.removeItem('crazyshot_project_data');
+        localStorage.removeItem('project_version');
+        localStorage.removeItem('activeTab');
+        console.log('🗑️ 로컬 스토리지 초기화 완료');
+        alert('✅ 로컬 스토리지가 초기화되었습니다. 페이지를 새로고침하세요.');
+        window.location.reload();
+      } catch (error) {
+        console.error('❌ 로컬 스토리지 초기화 실패:', error);
+        alert('❌ 로컬 스토리지 초기화에 실패했습니다.');
+      }
+    }
+  }, []);
+
+  // 개발용: 현재 상태 확인 함수
+  const checkCurrentState = useCallback(() => {
+    console.log('📊 현재 프로젝트 상태:', {
+      projectPhases: projectData.projectPhases,
+      phasesCount: projectData.projectPhases.length,
+      logs: projectData.logs,
+      localStorage: {
+        crazyshot_project_data: localStorage.getItem('crazyshot_project_data'),
+        project_version: localStorage.getItem('project_version')
+      }
+    });
+  }, [projectData]);
+
   return (
     <>
       {/* 다중 사용자 강화된 경고 스낵바 */}
@@ -559,30 +582,8 @@ const App: React.FC = () => {
         isVisible={showUserSnackbar}
         message={`🚨 위험: ${status.activeUserCount}명 동시 접속! 데이터 변경 시 충돌 위험이 높습니다. 작업 전 다른 사용자와 협의하세요.`}
         type="warning"
-        onClose={() => {
-          console.log('🔴 스낵바 닫기 버튼 클릭');
-          setShowUserSnackbar(false);
-        }}
+        onClose={() => setShowUserSnackbar(false)}
       />
-      
-      {/* 디버깅용 상태 표시 */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{
-          position: 'fixed',
-          top: '10px',
-          right: '10px',
-          backgroundColor: '#000',
-          color: '#fff',
-          padding: '10px',
-          borderRadius: '5px',
-          fontSize: '12px',
-          zIndex: 10000
-        }}>
-          <div>showUserSnackbar: {showUserSnackbar.toString()}</div>
-          <div>hasMultipleUsers: {status.hasMultipleUsers.toString()}</div>
-          <div>activeUserCount: {status.activeUserCount}</div>
-        </div>
-      )}
       
       {/* 실시간 활동 알림 스낵바 */}
       <BottomSnackbar
@@ -661,6 +662,17 @@ const App: React.FC = () => {
                                 <button onClick={downloadAsCSV} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-crazy-blue rounded-lg shadow-md hover:bg-crazy-bright-blue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-bright-blue transition-colors">
                                     <DownloadIcon className="w-4 h-4" /> 엑셀 내보내기
                                 </button>
+                                {/* 개발 환경에서만 표시되는 버튼들 */}
+                                {process.env.NODE_ENV === 'development' && (
+                                  <>
+                                    <button onClick={checkCurrentState} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-blue-600 bg-white border border-blue-600 rounded-lg shadow-md hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 transition-colors">
+                                        📊 상태 확인
+                                    </button>
+                                    <button onClick={clearLocalStorage} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 bg-white border border-red-600 rounded-lg shadow-md hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600 transition-colors">
+                                        🗑️ 로컬 데이터 초기화
+                                    </button>
+                                  </>
+                                )}
                             </div>
                         </div>
                         

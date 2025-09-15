@@ -2,8 +2,16 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 
 // 단순한 실시간 사용자 세션 관리
 export const useUserSession = () => {
-  const [sessionId] = useState(() => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
-  const [activeUsers, setActiveUsers] = useState<{ count: number; lastUpdate: Date }>({ count: 1, lastUpdate: new Date() });
+  const [sessionId] = useState(() => {
+    const id = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`🆔 [useUserSession] 세션 ID 생성:`, id);
+    return id;
+  });
+  const [activeUsers, setActiveUsers] = useState<{ count: number; lastUpdate: Date }>(() => {
+    const initial = { count: 1, lastUpdate: new Date() };
+    console.log(`👥 [useUserSession] 활성 사용자 초기값:`, initial);
+    return initial;
+  });
   const [recentActions, setRecentActions] = useState<string[]>([]);
   
   // 사용자 활동 알림
@@ -29,57 +37,121 @@ export const useUserSession = () => {
 
   // 활성 사용자 수 확인
   const checkActiveUsers = useCallback(async () => {
+    const timestamp = new Date().toISOString();
+    const isProduction = window.location.hostname !== 'localhost';
+    
+    console.log(`🔄 [${timestamp}] 사용자 확인 시작`, {
+      URL: `${window.location.origin}/api/users`,
+      환경: isProduction ? 'PRODUCTION' : 'DEVELOPMENT',
+      호스트: window.location.hostname,
+      프로토콜: window.location.protocol,
+      사용자에이전트: navigator.userAgent.substring(0, 100) + '...'
+    });
+    
     try {
-      console.log('👥 사용자 수 확인 시작...');
+      const requestStart = performance.now();
       const response = await fetch('/api/users');
-      console.log('📡 /api/users 응답:', response.status, response.statusText);
+      const requestTime = Math.round(performance.now() - requestStart);
+      
+      console.log(`📡 [${timestamp}] /api/users 응답:`, {
+        status: response.status,
+        statusText: response.statusText,
+        responseTime: `${requestTime}ms`,
+        url: response.url,
+        headers: Object.fromEntries([...response.headers.entries()])
+      });
       
       if (!response.ok) {
-        console.log('⚠️ /api/users 응답 실패:', response.status);
-        // API 실패 시 테스트용으로 2명 설정
+        console.log(`⚠️ [${timestamp}] API 응답 실패 - Status: ${response.status}`);
+        // API 실패 시 기본값 1명 유지
         setActiveUsers({
-          count: 2,
+          count: 1,
           lastUpdate: new Date()
         });
-        console.log('🧪 테스트용 다중 사용자 설정 (2명)');
+        console.log(`🔌 [${timestamp}] API 실패로 기본값 1명 설정`);
         return;
       }
       
-      const result = await response.json();
-      console.log('📊 사용자 데이터:', result);
+      const responseText = await response.text();
+      console.log(`📄 [${timestamp}] 원본 응답 텍스트:`, responseText.substring(0, 200) + (responseText.length > 200 ? '...' : ''));
       
-      if (result.success) {
-        setActiveUsers({
-          count: result.activeUserCount || 1,
-          lastUpdate: new Date()
-        });
-        console.log(`✅ 활성 사용자 수: ${result.activeUserCount || 1}명`);
+      try {
+        const result = JSON.parse(responseText);
+        console.log(`📊 [${timestamp}] 파싱된 사용자 데이터:`, result);
+        
+        if (result.success) {
+          const userCount = result.activeUserCount || 1;
+          setActiveUsers({
+            count: userCount,
+            lastUpdate: new Date()
+          });
+          console.log(`✅ [${timestamp}] 활성 사용자 수 업데이트: ${userCount}명`);
+        } else {
+          console.log(`❌ [${timestamp}] API 응답에서 success=false`);
+        }
+      } catch (parseError) {
+        console.error(`🚨 [${timestamp}] JSON 파싱 오류:`, parseError);
+        console.log(`🔧 [${timestamp}] 파싱 실패한 응답:`, responseText);
+        throw parseError;
       }
     } catch (error) {
-      console.log('❌ 사용자 확인 중 오류:', error);
-      // 네트워크 오류 시 테스트용으로 2명 설정
+      console.error(`❌ [${timestamp}] 사용자 확인 중 네트워크 오류:`, {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      // 네트워크 오류 시 기본값 1명 유지
       setActiveUsers({
-        count: 2,
+        count: 1,
         lastUpdate: new Date()
       });
-      console.log('🧪 오류 시 테스트용 다중 사용자 설정 (2명)');
+      console.log(`🔌 [${timestamp}] 네트워크 오류로 기본값 1명 설정`);
     }
   }, []);
 
   // 주기적 사용자 상태 확인
   useEffect(() => {
-    const interval = setInterval(checkActiveUsers, 15000); // 15초마다 확인
+    console.log(`⏰ [useUserSession] useEffect 실행 - 사용자 상태 확인 타이머 설정`);
+    console.log(`🔗 [useUserSession] checkActiveUsers 함수 의존성:`, typeof checkActiveUsers);
+    
+    const interval = setInterval(() => {
+      console.log(`⏱️ [useUserSession] 정기 사용자 확인 실행 (10초 간격)`);
+      checkActiveUsers();
+    }, 10000); // 10초마다 확인
+    
+    console.log(`🚀 [useUserSession] 초기 사용자 확인 실행`);
     checkActiveUsers(); // 초기 확인
     
-    return () => clearInterval(interval);
+    return () => {
+      console.log(`🛑 [useUserSession] useEffect 정리 - 타이머 해제`);
+      clearInterval(interval);
+    };
   }, [checkActiveUsers]);
+
+  // hasMultipleUsers 상태 계산 및 로깅
+  const hasMultipleUsers = activeUsers.count > 1;
+  const isMultipleUsersRef = useRef(hasMultipleUsers);
+  
+  // 다중 사용자 상태 변화 감지
+  useEffect(() => {
+    if (isMultipleUsersRef.current !== hasMultipleUsers) {
+      console.log(`🔄 [useUserSession] 다중 사용자 상태 변화:`, {
+        이전: isMultipleUsersRef.current,
+        현재: hasMultipleUsers,
+        사용자수: activeUsers.count,
+        시간: new Date().toISOString()
+      });
+      isMultipleUsersRef.current = hasMultipleUsers;
+    }
+  }, [hasMultipleUsers, activeUsers.count]);
 
   return {
     sessionId,
     activeUsers,
     recentActions,
     notifyUserAction,
-    hasMultipleUsers: activeUsers.count > 1
+    hasMultipleUsers
   };
 };
 
@@ -102,7 +174,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
   const {
     dataType,
     userId = 'anonymous',
-    autoSaveInterval = 30000, // 30초마다 자동 백업
+    autoSaveInterval = 15000, // 15초마다 자동 백업 (성능 개선)
     maxRetries = 3,
     retryDelay = 2000
   } = options;

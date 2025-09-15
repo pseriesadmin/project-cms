@@ -13,7 +13,7 @@ export const useProjectSync = (
 ) => {
   const {
     autoSave = true,
-    saveInterval = 10000 // 10초마다 버전 체크
+    saveInterval = 5000 // 5초마다 버전 체크 (성능 개선)
   } = options;
 
   // 버전 관리를 위한 상태
@@ -25,10 +25,8 @@ export const useProjectSync = (
       const savedData = localStorage.getItem('crazyshot_project_data');
       if (savedData) {
         const parsedData = JSON.parse(savedData);
-        console.log('✅ 로컬 저장소에서 데이터 로드');
         return parsedData;
       }
-      console.log('📝 로컬 저장소 데이터 없음, 초기 데이터 사용');
       return initialData;
     } catch (error) {
       console.error('❌ 로컬 데이터 로드 중 오류:', error);
@@ -74,7 +72,6 @@ export const useProjectSync = (
       setCurrentVersion(version);
       setLastSyncTime(new Date());
       
-      console.log('✅ 로컬 저장 완료, 버전:', version);
       return { success: true, message: '로컬 저장 완료', version };
     } catch (error) {
       console.error('❌ 로컬 저장 중 오류:', error);
@@ -90,10 +87,8 @@ export const useProjectSync = (
         const parsedData = JSON.parse(savedData);
         setProjectData(parsedData);
         setLastSyncTime(new Date());
-        console.log('✅ 로컬 복원 성공');
         return parsedData;
       } else {
-        console.log('📝 저장된 로컬 데이터가 없습니다.');
         return null;
       }
     } catch (error) {
@@ -112,14 +107,12 @@ export const useProjectSync = (
       const localVersion = localStorage.getItem('project_version');
       
       if (hasUpdates && localVersion !== latestVersion) {
-        console.log('🔄 새 버전 감지, 자동 복원 중...');
         const restoredData = await cloudRestore();
         
         if (restoredData) {
           setProjectData(restoredData);
           localStorage.setItem('project_version', latestVersion);
           setCurrentVersion(latestVersion);
-          console.log('✅ 자동 복원 완료');
         }
       }
     } catch (error) {
