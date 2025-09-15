@@ -81,7 +81,8 @@ const App: React.FC = () => {
 
   // 프로젝트 데이터 동기화
   const {
-    projectData, 
+    projectData,
+    isSyncing, // 초기 복원 로딩 상태 
     updateProjectData, 
     lastSyncTime,
     isOnline,
@@ -91,9 +92,9 @@ const App: React.FC = () => {
     currentVersion
   } = useProjectSync(initialData);
   
-  // 자동화 시스템 작동 상태 확인 (클라우드 버튼 필요성 판단)
-  const isAutoSyncWorking = isOnline && backupState.pendingBackups.length === 0;
-  const shouldShowCloudButtons = !isAutoSyncWorking || hasMultipleUsers;
+  // 자동 복원 동기화 상태 확인 (자동 백업은 비활성화)
+  const isAutoSyncWorking = isOnline; // 자동 복원 동기화 활성화 상태
+  const shouldShowCloudButtons = true; // 수동 백업/복원 버튼 항상 표시
 
   // 사용되지 않는 변수 참조 (lint 경고 해결)
   useEffect(() => {
@@ -656,8 +657,10 @@ const App: React.FC = () => {
                                        <span>현재 버전: {displayVersion.slice(-8)}</span>
                                      );
                                    })()}
-                                   {isAutoSyncWorking && (
-                                     <span className="ml-2 text-green-600">✓ 자동 동기화 활성</span>
+                                   {isSyncing ? (
+                                     <span className="ml-2 text-blue-600">🔄 데이터 복원 중...</span>
+                                   ) : isAutoSyncWorking && (
+                                     <span className="ml-2 text-green-600">✓ 자동 복원 동기화 활성</span>
                                    )}
                                  </div>
                                  <button onClick={handleBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">

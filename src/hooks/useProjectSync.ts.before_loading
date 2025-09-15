@@ -39,7 +39,7 @@ export const useProjectSync = (
   };
 
   const [projectData, setProjectData] = useState<ProjectData>(getSavedOrInitialData());
-  const [isSyncing, setIsSyncing] = useState(false); // 초기 복원 로딩 상태
+  const [isSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
   // 실시간 백업 시스템 통합 (트래픽 최적화 - 자동 백업 비활성화)
@@ -101,11 +101,7 @@ export const useProjectSync = (
   }, [autoRestore, syncInterval]);
 
   // 버전 체크 및 자동 복원 함수
-  const checkAndAutoRestore = useCallback(async (showLoading = false) => {
-    if (showLoading) {
-      setIsSyncing(true);
-      console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시');
-    }
+  const checkAndAutoRestore = useCallback(async () => {
     try {
       const response = await fetch('/api/version');
       if (!response.ok) return;
@@ -114,11 +110,9 @@ export const useProjectSync = (
       const localVersion = localStorage.getItem('project_version');
       
       if (hasUpdates && localVersion !== latestVersion) {
-        console.log('📥 [useProjectSync] 새 버전 감지 - 백업 복원 시작');
         const restoredData = await cloudRestore();
         
         if (restoredData) {
-          console.log('✅ [useProjectSync] 백업 복원 완료');
           setProjectData(restoredData);
           localStorage.setItem('project_version', latestVersion);
           setCurrentVersion(latestVersion);
@@ -126,11 +120,6 @@ export const useProjectSync = (
       }
     } catch (error) {
       console.log('버전 체크 중 오류:', error);
-    } finally {
-      if (showLoading) {
-        setIsSyncing(false);
-        console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제');
-      }
     }
   }, [cloudRestore]);
 
@@ -182,9 +171,9 @@ export const useProjectSync = (
     });
   }, [autoSave, saveToLocal, cloudSave, generateVersion]);
 
-  // 초기 로드 시 최신 버전 체크 및 복원 (로딩 표시 포함)
+  // 초기 로드 시 최신 버전 체크 및 복원
   useEffect(() => {
-    checkAndAutoRestore(true); // 초기 로드 시 로딩 표시
+    checkAndAutoRestore();
   }, [checkAndAutoRestore]);
 
   // 주기적 버전 체크 및 자동 복원 (자동 복원만 활성화)

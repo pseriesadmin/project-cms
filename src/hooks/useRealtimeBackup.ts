@@ -130,7 +130,7 @@ export const useUserSession = () => {
         };
       });
     }, 30000);
-
+    
     return () => {
       console.log(`🛑 [useUserSession] 브로드캐스트 채널 정리`);
       clearInterval(heartbeatInterval);
@@ -203,7 +203,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
   const {
     dataType,
     userId = 'anonymous',
-    autoSaveInterval = 60000, // 60초마다 자동 백업 (트래픽 최적화)
+    // autoSaveInterval 제거 - 자동 백업 완전 비활성화
     maxRetries = 3,
     retryDelay = 2000
   } = options;
@@ -371,25 +371,16 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
     }
   }, [dataType, userId, backupState.isOnline]);
 
-  // 자동 백업 설정
-  const startAutoBackup = useCallback((getData: () => T) => {
-    const performAutoBackup = () => {
-      const currentData = getData();
-      if (currentData) {
-        saveToCloud(currentData);
-      }
-      
-      autoSaveTimeoutRef.current = setTimeout(performAutoBackup, autoSaveInterval);
-    };
-
-    autoSaveTimeoutRef.current = setTimeout(performAutoBackup, autoSaveInterval);
+  // 자동 백업 설정 (트래픽 최적화 - 완전 비활성화)
+  const startAutoBackup = useCallback((_getData: () => T) => {
+    console.log('🛑 [useRealtimeBackup] 자동 백업 완전 비활성화 - 트래픽 급증 방지');
     
+    // 자동 백업 타이머 설정하지 않음
     return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
+      // 정리 함수만 제공
+      console.log('🛑 [useRealtimeBackup] 자동 백업 정리 (실제로는 타이머 없음)');
     };
-  }, [autoSaveInterval, saveToCloud]);
+  }, []);
 
   return {
     saveToCloud,
