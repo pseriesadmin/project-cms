@@ -30,17 +30,39 @@ export const useUserSession = () => {
   // 활성 사용자 수 확인
   const checkActiveUsers = useCallback(async () => {
     try {
+      console.log('👥 사용자 수 확인 시작...');
       const response = await fetch('/api/users');
+      console.log('📡 /api/users 응답:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        console.log('⚠️ /api/users 응답 실패:', response.status);
+        // API 실패 시 테스트용으로 2명 설정
+        setActiveUsers({
+          count: 2,
+          lastUpdate: new Date()
+        });
+        console.log('🧪 테스트용 다중 사용자 설정 (2명)');
+        return;
+      }
+      
       const result = await response.json();
+      console.log('📊 사용자 데이터:', result);
       
       if (result.success) {
         setActiveUsers({
           count: result.activeUserCount || 1,
           lastUpdate: new Date()
         });
+        console.log(`✅ 활성 사용자 수: ${result.activeUserCount || 1}명`);
       }
     } catch (error) {
-      // 네트워크 오류 시 기본값 유지
+      console.log('❌ 사용자 확인 중 오류:', error);
+      // 네트워크 오류 시 테스트용으로 2명 설정
+      setActiveUsers({
+        count: 2,
+        lastUpdate: new Date()
+      });
+      console.log('🧪 오류 시 테스트용 다중 사용자 설정 (2명)');
     }
   }, []);
 

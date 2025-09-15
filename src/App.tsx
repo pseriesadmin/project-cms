@@ -118,11 +118,18 @@ const App: React.FC = () => {
 
   // 다중 사용자 감지 시 강화된 경고 표시
   useEffect(() => {
+    console.log(`🔍 다중 사용자 상태 체크:`, {
+      hasMultipleUsers: status.hasMultipleUsers,
+      activeUserCount: status.activeUserCount,
+      showUserSnackbar
+    });
+    
     if (status.hasMultipleUsers && !showUserSnackbar) {
+      console.log('🚨 다중 사용자 감지! 경고 스낵바 표시');
       setShowUserSnackbar(true);
       // 지속적 표시 (수동 닫기 필요)
     }
-  }, [status.hasMultipleUsers, showUserSnackbar]);
+  }, [status.hasMultipleUsers, status.activeUserCount, showUserSnackbar]);
 
   // 다중 사용자 환경에서 데이터 변경 시 추가 확인
   const confirmDataChange = useCallback((action: string) => {
@@ -552,8 +559,30 @@ const App: React.FC = () => {
         isVisible={showUserSnackbar}
         message={`🚨 위험: ${status.activeUserCount}명 동시 접속! 데이터 변경 시 충돌 위험이 높습니다. 작업 전 다른 사용자와 협의하세요.`}
         type="warning"
-        onClose={() => setShowUserSnackbar(false)}
+        onClose={() => {
+          console.log('🔴 스낵바 닫기 버튼 클릭');
+          setShowUserSnackbar(false);
+        }}
       />
+      
+      {/* 디버깅용 상태 표시 */}
+      {process.env.NODE_ENV === 'development' && (
+        <div style={{
+          position: 'fixed',
+          top: '10px',
+          right: '10px',
+          backgroundColor: '#000',
+          color: '#fff',
+          padding: '10px',
+          borderRadius: '5px',
+          fontSize: '12px',
+          zIndex: 10000
+        }}>
+          <div>showUserSnackbar: {showUserSnackbar.toString()}</div>
+          <div>hasMultipleUsers: {status.hasMultipleUsers.toString()}</div>
+          <div>activeUserCount: {status.activeUserCount}</div>
+        </div>
+      )}
       
       {/* 실시간 활동 알림 스낵바 */}
       <BottomSnackbar
