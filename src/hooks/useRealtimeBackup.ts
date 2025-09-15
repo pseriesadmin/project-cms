@@ -115,19 +115,23 @@ export const useUserSession = () => {
     console.log(`⏰ [useUserSession] useEffect 실행 - 사용자 상태 확인 타이머 설정`);
     console.log(`🔗 [useUserSession] checkActiveUsers 함수 의존성:`, typeof checkActiveUsers);
     
-    const interval = setInterval(() => {
-      console.log(`⏱️ [useUserSession] 정기 사용자 확인 실행 (10초 간격)`);
-      checkActiveUsers();
-    }, 10000); // 10초마다 확인
+    // 초기 사용자 등록
+    console.log(`🚀 [useUserSession] 초기 사용자 등록 및 확인 실행`);
+    notifyUserAction('페이지_접속');
+    checkActiveUsers();
     
-    console.log(`🚀 [useUserSession] 초기 사용자 확인 실행`);
-    checkActiveUsers(); // 초기 확인
+    const interval = setInterval(() => {
+      console.log(`⏱️ [useUserSession] 정기 사용자 활동 알림 및 확인 (10초 간격)`);
+      notifyUserAction('활성_상태');
+      checkActiveUsers();
+    }, 10000); // 10초마다 활동 알림 + 확인
     
     return () => {
       console.log(`🛑 [useUserSession] useEffect 정리 - 타이머 해제`);
+      notifyUserAction('페이지_종료');
       clearInterval(interval);
     };
-  }, [checkActiveUsers]);
+  }, [checkActiveUsers, notifyUserAction]);
 
   // hasMultipleUsers 상태 계산 및 로깅
   const hasMultipleUsers = activeUsers.count > 1;
