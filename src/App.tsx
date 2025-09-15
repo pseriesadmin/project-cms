@@ -400,6 +400,7 @@ const App: React.FC = () => {
             {
               timestamp: getTimestamp(),
               message: '클라우드 백업에서 데이터가 성공적으로 복원되었습니다.',
+              version: currentVersion
             }
           ]
         };
@@ -517,6 +518,7 @@ const App: React.FC = () => {
           {
             timestamp: getTimestamp(),
             message: '데이터가 백업 파일로부터 성공적으로 복원되었습니다.',
+            version: currentVersion
           }
         ]
       };
@@ -645,9 +647,13 @@ const App: React.FC = () => {
                                    </>
                                  )}
                                  <div className="text-xs text-gray-500">
-                                   {currentVersion && (
-                                     <span>현재 버전: {currentVersion.slice(-8)}</span>
-                                   )}
+                                   {(() => {
+                                     const latestLog = projectData.logs[projectData.logs.length - 1];
+                                     const displayVersion = latestLog?.version || currentVersion;
+                                     return displayVersion && (
+                                       <span>현재 버전: {displayVersion.slice(-8)}</span>
+                                     );
+                                   })()}
                                    {isAutoSyncWorking && (
                                      <span className="ml-2 text-green-600">✓ 자동 동기화 활성</span>
                                    )}

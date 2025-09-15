@@ -29,6 +29,7 @@ export interface ProjectPhase {
 export interface LogEntry {
   timestamp: string;
   message: string;
+  version?: string;
 }
 
 export interface ProjectData {

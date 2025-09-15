@@ -7,7 +7,7 @@ interface ChangeLogDisplayProps {
 }
 
 export const ChangeLogDisplay: React.FC<ChangeLogDisplayProps> = ({ logs, onShowMore }) => {
-  const latestLog = logs[0];
+  const latestLog = logs[logs.length - 1];
 
   return (
     <div className="mt-4 p-3 bg-slate-200 rounded-lg flex items-center justify-between text-sm">
