@@ -105,7 +105,7 @@ export const useProjectSync = (
   // 버전 체크 및 자동 복원 함수
   const checkAndAutoRestore = useCallback(async () => {
     try {
-      const response = await fetch('/api/project/version');
+      const response = await fetch('/api/version');
       if (!response.ok) return;
       
       const { latestVersion, hasUpdates } = await response.json();
