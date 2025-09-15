@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Equipment, EquipmentLogEntry, FormField, VersionHistory } from '../types';
+import { Equipment, EquipmentLogEntry, FormField, VersionHistory, LogArchive } from '../types';
 import { useRealtimeBackup } from './useRealtimeBackup';
 
 // 초기 데이터
@@ -121,7 +121,7 @@ export const useEquipmentData = () => {
 
   const [equipmentData, setEquipmentData] = useState<Equipment[]>(getInitialEquipmentData);
   const [logData, setLogData] = useState<EquipmentLogEntry[]>([]);
-  const [logArchive, setLogArchive] = useState<any[]>([]);
+  const [logArchive, setLogArchive] = useState<LogArchive[]>([]);
   const [formFields, setFormFields] = useState<FormField[]>(defaultFormFields);
   const [isFirstRun, setIsFirstRun] = useState(true);
 
@@ -134,7 +134,7 @@ export const useEquipmentData = () => {
   } = useRealtimeBackup<{
     equipmentData: Equipment[];
     logData: EquipmentLogEntry[];
-    logArchive: any[];
+    logArchive: LogArchive[];
     formFields: FormField[];
   }>({
     dataType: 'equipment',

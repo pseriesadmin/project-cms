@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { EquipmentLogEntry } from '../../types';
+import { EquipmentLogEntry, LogArchive } from '../../types';
 
 interface EquipmentLogTableProps {
   logData: EquipmentLogEntry[];
-  logArchive: any[];
+  logArchive: LogArchive[];
 }
 
 export const EquipmentLogTable: React.FC<EquipmentLogTableProps> = ({

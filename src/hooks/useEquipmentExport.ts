@@ -1,13 +1,13 @@
 import { useCallback } from 'react';
 import Papa from 'papaparse';
-import { Equipment, FormField, EquipmentLogEntry } from '../types';
+import { Equipment, FormField, EquipmentLogEntry, LogArchive } from '../types';
 
 export const useEquipmentExport = () => {
   // 클라우드 백업 (Vercel 기반)
   const cloudBackup = useCallback(async (
     equipmentData: Equipment[],
     logData: EquipmentLogEntry[],
-    logArchive: any[],
+    logArchive: LogArchive[],
     formFields: FormField[],
     _versionHistory: any[]
   ) => {
@@ -376,7 +376,7 @@ export const useEquipmentExport = () => {
            // 로그 데이터 병합 로직 추가
            const mergedLogData = [
              ...(restoredData.logData || []),
-             ...(restoredData.logArchive?.flatMap((archive: any) => archive.logs || []) || [])
+             ...(restoredData.logArchive?.flatMap((archive: LogArchive) => archive.logs || []) || [])
            ];
           
           resolve({

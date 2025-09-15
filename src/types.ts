@@ -80,6 +80,11 @@ export interface EquipmentLogEntry {
   summary: string;
 }
 
+export interface LogArchive {
+  archivedAt: string;
+  logs: EquipmentLogEntry[];
+}
+
 export interface EquipmentState {
   category: string;
   manufacturer: string;
