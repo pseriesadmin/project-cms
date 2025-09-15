@@ -116,14 +116,25 @@ const App: React.FC = () => {
 
   const totalProgress = totalCheckpoints > 0 ? Math.round((completedCheckpoints / totalCheckpoints) * 100) : 0;
 
-  // 다중 사용자 감지 시 스낵바 표시
+  // 다중 사용자 감지 시 강화된 경고 표시
   useEffect(() => {
     if (status.hasMultipleUsers && !showUserSnackbar) {
       setShowUserSnackbar(true);
-      // 10초 후 자동 숨김
-      setTimeout(() => setShowUserSnackbar(false), 10000);
+      // 지속적 표시 (수동 닫기 필요)
     }
   }, [status.hasMultipleUsers, showUserSnackbar]);
+
+  // 다중 사용자 환경에서 데이터 변경 시 추가 확인
+  const confirmDataChange = useCallback((action: string) => {
+    if (status.hasMultipleUsers) {
+      return window.confirm(
+        `⚠️ 현재 ${status.activeUserCount}명이 동시 접속 중입니다.\n` +
+        `'${action}' 작업을 계속하시겠습니까?\n\n` +
+        `다른 사용자의 작업과 충돌할 수 있습니다.`
+      );
+    }
+    return true;
+  }, [status.hasMultipleUsers, status.activeUserCount]);
 
   // 실시간 활동 알림 표시
   useEffect(() => {
@@ -135,6 +146,8 @@ const App: React.FC = () => {
   }, [recentActions.length, hasMultipleUsers]);
 
   const handleUpdatePhase = useCallback((phaseId: string, updates: Partial<ProjectPhase>) => {
+    if (!confirmDataChange('워크플로우 수정')) return;
+    
     updateProjectData(draft => {
       const phase = draft.projectPhases.find((p: ProjectPhase) => p.id === phaseId);
       if (phase) {
@@ -143,9 +156,11 @@ const App: React.FC = () => {
         notifyUserAction(`프로젝트 단계 '${phase.title}' 수정`);
       }
     });
-  }, [updateProjectData, notifyUserAction]);
+  }, [updateProjectData, notifyUserAction, confirmDataChange]);
 
   const handleAddPhase = useCallback(() => {
+    if (!confirmDataChange('새 워크플로우 추가')) return;
+    
     updateProjectData(draft => {
       const newPhase: ProjectPhase = {
         id: `phase-${Date.now()}`,
@@ -156,7 +171,7 @@ const App: React.FC = () => {
       // 사용자 활동 알림
       notifyUserAction('새 워크플로우 추가');
     });
-  }, [updateProjectData, notifyUserAction]);
+  }, [updateProjectData, notifyUserAction, confirmDataChange]);
 
   const handleDeletePhase = useCallback((phaseId: string) => {
     setPhaseToDelete(phaseId);
@@ -164,6 +179,11 @@ const App: React.FC = () => {
 
   const confirmDeletePhase = useCallback(() => {
     if (!phaseToDelete) return;
+    if (!confirmDataChange('워크플로우 삭제')) {
+      setPhaseToDelete(null);
+      return;
+    }
+    
     updateProjectData(draft => {
       const phaseIndex = draft.projectPhases.findIndex((p: ProjectPhase) => p.id === phaseToDelete);
       if (phaseIndex === -1) return;
@@ -172,7 +192,7 @@ const App: React.FC = () => {
       console.log(`삭제된 워크플로우: ${removedPhase.title}`);
     });
     setPhaseToDelete(null);
-  }, [phaseToDelete, updateProjectData]);
+  }, [phaseToDelete, updateProjectData, confirmDataChange]);
 
   const handleUpdateTask = useCallback((phaseId: string, taskId: string, updates: Partial<Task>) => {
     updateProjectData(draft => {
@@ -527,10 +547,10 @@ const App: React.FC = () => {
 
   return (
     <>
-      {/* 다중 사용자 알림 스낵바 */}
+      {/* 다중 사용자 강화된 경고 스낵바 */}
       <TopSnackbar
         isVisible={showUserSnackbar}
-        message={`⚠️ 현재 ${status.activeUserCount}명이 동시에 접속중입니다. 데이터 변경 시 주의하세요.`}
+        message={`🚨 위험: ${status.activeUserCount}명 동시 접속! 데이터 변경 시 충돌 위험이 높습니다. 작업 전 다른 사용자와 협의하세요.`}
         type="warning"
         onClose={() => setShowUserSnackbar(false)}
       />
