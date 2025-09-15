@@ -23,9 +23,9 @@ export const useUserSession = () => {
     users: string[]; 
   }>(() => {
     const initial = { 
-      count: 1, 
+      count: 0, 
       lastUpdate: new Date(),
-      users: [sessionId] // 현재 사용자를 기본 사용자 목록에 추가
+      users: [] // 서버 응답 대기
     };
     console.log(`👥 [useUserSession] 활성 사용자 초기값:`, initial);
     return initial;
@@ -84,13 +84,13 @@ export const useUserSession = () => {
       
       if (!response.ok) {
         console.log(`⚠️ [${timestamp}] API 응답 실패 - Status: ${response.status}`);
-        // API 실패 시 기본값 1명 유지
+        // API 실패 시 기본값 0명 유지 (서버 연결 안됨)
         setActiveUsers({
-          count: 1,
+          count: 0,
           lastUpdate: new Date(),
-          users: [sessionId]
+          users: []
         });
-        console.log(`🔌 [${timestamp}] API 실패로 기본값 1명 설정`);
+        console.log(`🔌 [${timestamp}] API 실패로 기본값 0명 설정`);
         return;
       }
       
@@ -102,13 +102,8 @@ export const useUserSession = () => {
         console.log(`📊 [${timestamp}] 파싱된 사용자 데이터:`, result);
         
         if (result.success) {
-          const userCount = result.activeUserCount || 1;
-          const userList = result.users || [sessionId];
-          
-          // 현재 사용자가 목록에 없으면 추가
-          if (!userList.includes(sessionId)) {
-            userList.push(sessionId);
-          }
+          const userCount = result.activeUserCount || 0;
+          const userList = result.users || [];
           
           setActiveUsers({
             count: userCount,
@@ -129,11 +124,11 @@ export const useUserSession = () => {
         
         // 로컬 개발 환경에서 JavaScript 파일을 읽는 경우 기본값 설정
         if (responseText.includes('export default') || responseText.includes('function handler')) {
-          console.log(`🔧 [${timestamp}] 로컬 개발 환경 감지 - 기본값 1명 설정`);
+          console.log(`🔧 [${timestamp}] 로컬 개발 환경 감지 - 기본값 0명 설정`);
           setActiveUsers({
-            count: 1,
+            count: 0,
             lastUpdate: new Date(),
-            users: [sessionId]
+            users: []
           });
           return;
         }
@@ -147,13 +142,13 @@ export const useUserSession = () => {
         stack: error instanceof Error ? error.stack : undefined
       });
       
-      // 네트워크 오류 시 기본값 1명 유지
+      // 네트워크 오류 시 기본값 0명 유지 (연결 안됨)
       setActiveUsers({
-        count: 1,
+        count: 0,
         lastUpdate: new Date(),
-        users: [sessionId]
+        users: []
       });
-      console.log(`🔌 [${timestamp}] 네트워크 오류로 기본값 1명 설정`);
+      console.log(`🔌 [${timestamp}] 네트워크 오류로 기본값 0명 설정`);
     }
   }, []);
 
@@ -204,8 +199,8 @@ export const useUserSession = () => {
     };
   }, [checkActiveUsers]);
 
-  // hasMultipleUsers 상태 계산 및 로깅
-  const hasMultipleUsers = activeUsers.count > 1 && activeUsers.users.length > 1;
+  // hasMultipleUsers 상태 계산 및 로깅 (서버 응답 기준으로만 판단)
+  const hasMultipleUsers = activeUsers.count > 1;
   const isMultipleUsersRef = useRef(hasMultipleUsers);
   
   // 다중 사용자 상태 변화 감지
