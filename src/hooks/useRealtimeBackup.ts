@@ -25,6 +25,7 @@ export const useUserSession = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId: userId || sessionId,
           sessionId,
           action,
           timestamp: new Date().toISOString()
@@ -92,6 +93,17 @@ export const useUserSession = () => {
       } catch (parseError) {
         console.error(`🚨 [${timestamp}] JSON 파싱 오류:`, parseError);
         console.log(`🔧 [${timestamp}] 파싱 실패한 응답:`, responseText);
+        
+        // 로컬 개발 환경에서 JavaScript 파일을 읽는 경우 기본값 설정
+        if (responseText.includes('export default') || responseText.includes('function handler')) {
+          console.log(`🔧 [${timestamp}] 로컬 개발 환경 감지 - 기본값 1명 설정`);
+          setActiveUsers({
+            count: 1,
+            lastUpdate: new Date()
+          });
+          return;
+        }
+        
         throw parseError;
       }
     } catch (error) {
