@@ -168,10 +168,9 @@ export const useUserSession = () => {
     checkActiveUsers();
     
     const interval = setInterval(() => {
-      console.log(`⏱️ [useUserSession] 정기 사용자 활동 알림 및 확인 (10초 간격)`);
-      notifyUserAction('활성_상태');
+      console.log(`⏱️ [useUserSession] 정기 사용자 확인 (30초 간격)`);
       checkActiveUsers();
-    }, 10000); // 10초마다 활동 알림 + 확인
+    }, 30000); // 30초마다 확인만 (트래픽 최적화)
     
     return () => {
       console.log(`🛑 [useUserSession] useEffect 정리 - 타이머 해제`);
