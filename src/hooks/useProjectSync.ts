@@ -13,8 +13,11 @@ export const useProjectSync = (
 ) => {
   const {
     autoSave = true,
-    saveInterval = 60000 // 1분마다 자동 저장
+    saveInterval = 10000 // 10초마다 버전 체크
   } = options;
+
+  // 버전 관리를 위한 상태
+  const [currentVersion, setCurrentVersion] = useState<string>('');
 
   // 로컬 스토리지에서 저장된 데이터 먼저 확인
   const getSavedOrInitialData = () => {
@@ -50,23 +53,34 @@ export const useProjectSync = (
     autoSaveInterval: saveInterval
   });
 
-  // 로컬 저장소에 프로젝트 데이터 저장
+  // 버전 생성 함수
+  const generateVersion = useCallback((data: ProjectData) => {
+    const dataStr = JSON.stringify(data);
+    const hash = dataStr.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    return `v${Date.now()}-${Math.abs(hash)}`;
+  }, []);
+
+  // 로컬 저장소에 프로젝트 데이터 저장 (버전 포함)
   const saveToLocal = useCallback((data: ProjectData) => {
     try {
-      const dataSize = JSON.stringify(data).length;
-      console.log('🔍 [DEBUG] 클라우드 저장 시도 (현재 비활성화됨), 데이터 크기:', dataSize);
+      const version = generateVersion(data);
+      const dataWithVersion = { ...data, version };
       
-      // 로컬 저장소에 저장
-      localStorage.setItem('crazyshot_project_data', JSON.stringify(data));
+      localStorage.setItem('crazyshot_project_data', JSON.stringify(dataWithVersion));
+      localStorage.setItem('project_version', version);
+      setCurrentVersion(version);
       setLastSyncTime(new Date());
-      console.log('✅ 로컬 저장만 완료');
       
-      return { success: true, message: '로컬 저장 완료' };
+      console.log('✅ 로컬 저장 완료, 버전:', version);
+      return { success: true, message: '로컬 저장 완료', version };
     } catch (error) {
       console.error('❌ 로컬 저장 중 오류:', error);
       throw error;
     }
-  }, []);
+  }, [generateVersion]);
 
   // 로컬 저장소에서 프로젝트 데이터 복원
   const restoreFromLocal = useCallback(() => {
@@ -88,41 +102,87 @@ export const useProjectSync = (
     }
   }, []);
 
-  // 데이터 업데이트 및 자동 저장
+  // 버전 체크 및 자동 복원 함수
+  const checkAndAutoRestore = useCallback(async () => {
+    try {
+      const response = await fetch('/api/project/version');
+      if (!response.ok) return;
+      
+      const { latestVersion, hasUpdates } = await response.json();
+      const localVersion = localStorage.getItem('project_version');
+      
+      if (hasUpdates && localVersion !== latestVersion) {
+        console.log('🔄 새 버전 감지, 자동 복원 중...');
+        const restoredData = await cloudRestore();
+        
+        if (restoredData) {
+          setProjectData(restoredData);
+          localStorage.setItem('project_version', latestVersion);
+          setCurrentVersion(latestVersion);
+          console.log('✅ 자동 복원 완료');
+        }
+      }
+    } catch (error) {
+      console.log('버전 체크 중 오류:', error);
+    }
+  }, [cloudRestore]);
+
+  // 데이터 업데이트 및 자동 저장 (버전 관리 포함)
   const updateProjectData = useCallback((updater: (draft: ProjectData) => void | ProjectData) => {
     setProjectData(currentState => {
-      // updater가 새로운 상태를 반환하는 경우 처리
       if (typeof updater === 'function') {
         const draft = JSON.parse(JSON.stringify(currentState));
         const result = updater(draft);
-        
-        // updater가 새로운 객체를 반환하는 경우
         const finalData = result || draft;
         
-        // 로컬 및 클라우드 자동 저장
+        // 변경 로그에 버전 정보 추가
+        const timestamp = new Date().toLocaleString('ko-KR');
+        const version = generateVersion(finalData);
+        
+        const updatedData = {
+          ...finalData,
+          logs: [
+            ...finalData.logs,
+            {
+              timestamp,
+              message: `데이터 업데이트 (버전: ${version})`,
+              version
+            }
+          ]
+        };
+        
         if (autoSave) {
           try {
-            saveToLocal(finalData);
-            cloudSave(finalData); // 실시간 클라우드 백업
+            saveToLocal(updatedData);
+            cloudSave(updatedData);
           } catch (error) {
             console.error('자동 저장 실패:', error);
           }
         }
         
-        return finalData;
+        return updatedData;
       }
-      
       return currentState;
     });
-  }, [autoSave, saveToLocal, cloudSave]);
+  }, [autoSave, saveToLocal, cloudSave, generateVersion]);
 
-  // 실시간 자동 백업 시작
+  // 초기 로드 시 최신 버전 체크 및 복원
+  useEffect(() => {
+    checkAndAutoRestore();
+  }, [checkAndAutoRestore]);
+
+  // 주기적 버전 체크 및 자동 복원
   useEffect(() => {
     if (!autoSave) return;
-    
+
+    const versionCheckInterval = setInterval(checkAndAutoRestore, saveInterval);
     const stopAutoBackup = startAutoBackup(() => projectData);
-    return stopAutoBackup;
-  }, [autoSave, startAutoBackup, projectData]);
+    
+    return () => {
+      clearInterval(versionCheckInterval);
+      stopAutoBackup();
+    };
+  }, [autoSave, saveInterval, checkAndAutoRestore, startAutoBackup, projectData]);
 
   return {
     projectData,
@@ -134,6 +194,7 @@ export const useProjectSync = (
     lastSyncTime,
     isSyncing,
     isOnline,
-    backupState
+    backupState,
+    currentVersion
   };
 };

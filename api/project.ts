@@ -20,6 +20,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case 'POST':
         return await handleProjectSave(req, res);
       case 'GET':
+        // 버전 체크 요청 구분
+        if (req.url?.includes('/version')) {
+          return await handleVersionCheck(req, res);
+        }
         return await handleProjectRetrieve(req, res);
       default:
         res.setHeader('Allow', ['POST', 'GET']);
@@ -86,6 +90,21 @@ async function handleProjectRetrieve(req: VercelRequest, res: VercelResponse) {
     projectId: latestProjectId,
     projectData: latestProjectData,
     retrievedAt: new Date().toISOString()
+  });
+}
+
+async function handleVersionCheck(req: VercelRequest, res: VercelResponse) {
+  // 최신 프로젝트 버전 정보 반환
+  const latestVersion = `v${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+  const hasUpdates = Math.random() > 0.7; // 30% 확률로 업데이트 감지
+  
+  console.log(`🔄 버전 체크 요청: ${latestVersion}`);
+  
+  return res.status(200).json({
+    success: true,
+    latestVersion,
+    hasUpdates,
+    checkTime: new Date().toISOString()
   });
 }
 

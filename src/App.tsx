@@ -80,8 +80,13 @@ const App: React.FC = () => {
     isOnline,
     backupState,
     cloudBackup,
-    cloudRestore
+    cloudRestore,
+    currentVersion
   } = useProjectSync(initialData);
+  
+  // 자동화 시스템 작동 상태 확인 (클라우드 버튼 필요성 판단)
+  const isAutoSyncWorking = isOnline && backupState.pendingBackups.length === 0;
+  const shouldShowCloudButtons = !isAutoSyncWorking || hasMultipleUsers;
 
   // 사용되지 않는 변수 참조 (lint 경고 해결)
   useEffect(() => {
@@ -577,21 +582,33 @@ const App: React.FC = () => {
                         <p className="text-crazy-gray mb-4">
                             실시간으로 프로젝트 각 분야 별 업무현황을 기록하고 공유하세요.
                         </p>
-                        <div className="bg-white border border-slate-200 rounded-lg p-4 mb-4 shadow-sm">
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleCloudBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
-                                    <CloudUploadIcon className="w-4 h-4" /> 클라우드 백업
-                                </button>
-                                <button onClick={handleCloudRestore} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
-                                    <CloudDownloadIcon className="w-4 h-4" /> 클라우드 복원
-                                </button>
-                                <button onClick={handleBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
-                                    <SaveIcon className="w-4 h-4" /> 정보 백업
-                                </button>
-                                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
-                                <button onClick={handleRestoreClick} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
-                                    <UploadIcon className="w-4 h-4" /> 정보 복원
-                                </button>
+                         <div className="bg-white border border-slate-200 rounded-lg p-4 mb-4 shadow-sm">
+                             <div className="flex items-center gap-2">
+                                 {shouldShowCloudButtons && (
+                                   <>
+                                     <button onClick={handleCloudBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
+                                         <CloudUploadIcon className="w-4 h-4" /> 클라우드 백업
+                                     </button>
+                                     <button onClick={handleCloudRestore} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
+                                         <CloudDownloadIcon className="w-4 h-4" /> 클라우드 복원
+                                     </button>
+                                   </>
+                                 )}
+                                 <div className="text-xs text-gray-500">
+                                   {currentVersion && (
+                                     <span>현재 버전: {currentVersion.slice(-8)}</span>
+                                   )}
+                                   {isAutoSyncWorking && (
+                                     <span className="ml-2 text-green-600">✓ 자동 동기화 활성</span>
+                                   )}
+                                 </div>
+                                 <button onClick={handleBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
+                                     <SaveIcon className="w-4 h-4" /> 파일 백업
+                                 </button>
+                                 <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
+                                 <button onClick={handleRestoreClick} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
+                                     <UploadIcon className="w-4 h-4" /> 파일 복원
+                                 </button>
                                 <button onClick={downloadAsCSV} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-crazy-blue rounded-lg shadow-md hover:bg-crazy-bright-blue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-bright-blue transition-colors">
                                     <DownloadIcon className="w-4 h-4" /> 엑셀 내보내기
                                 </button>
