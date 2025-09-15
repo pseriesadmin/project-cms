@@ -162,22 +162,47 @@ export const useUserSession = () => {
     console.log(`⏰ [useUserSession] useEffect 실행 - 사용자 상태 확인 타이머 설정`);
     console.log(`🔗 [useUserSession] checkActiveUsers 함수 의존성:`, typeof checkActiveUsers);
     
-    // 초기 사용자 등록
+    // 초기 사용자 등록 (한 번만)
     console.log(`🚀 [useUserSession] 초기 사용자 등록 및 확인 실행`);
-    notifyUserAction('페이지_접속');
+    const initialNotify = () => {
+      try {
+        fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: sessionId,
+            sessionId,
+            action: '페이지_접속',
+            timestamp: new Date().toISOString()
+          })
+        }).catch(() => {});
+      } catch {}
+    };
+    initialNotify();
     checkActiveUsers();
     
     const interval = setInterval(() => {
-      console.log(`⏱️ [useUserSession] 정기 사용자 확인 (30초 간격)`);
+      console.log(`⏱️ [useUserSession] 정기 사용자 확인 (60초 간격)`);
       checkActiveUsers();
-    }, 30000); // 30초마다 확인만 (트래픽 최적화)
+    }, 60000); // 60초마다 확인만 (트래픽 대폭 감소)
     
     return () => {
       console.log(`🛑 [useUserSession] useEffect 정리 - 타이머 해제`);
-      notifyUserAction('페이지_종료');
+      try {
+        fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: sessionId,
+            sessionId,
+            action: '페이지_종료',
+            timestamp: new Date().toISOString()
+          })
+        }).catch(() => {});
+      } catch {}
       clearInterval(interval);
     };
-  }, [checkActiveUsers, notifyUserAction]);
+  }, [checkActiveUsers]);
 
   // hasMultipleUsers 상태 계산 및 로깅
   const hasMultipleUsers = activeUsers.count > 1 && activeUsers.users.length > 1;
