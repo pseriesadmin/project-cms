@@ -3,12 +3,30 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 // 단순한 실시간 사용자 세션 관리
 export const useUserSession = () => {
   const [sessionId] = useState(() => {
-    const id = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`🆔 [useUserSession] 세션 ID 생성:`, id);
-    return id;
+    // 기존 localStorage에서 사용자 ID 확인
+    const storedSessionId = localStorage.getItem('crazyshot_session_id');
+    
+    if (storedSessionId) {
+      console.log(`🆔 [useUserSession] 기존 세션 ID 로드:`, storedSessionId);
+      return storedSessionId;
+    }
+    
+    // 새로운 세션 ID 생성 및 저장
+    const newSessionId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem('crazyshot_session_id', newSessionId);
+    console.log(`🆔 [useUserSession] 새 세션 ID 생성 및 저장:`, newSessionId);
+    return newSessionId;
   });
-  const [activeUsers, setActiveUsers] = useState<{ count: number; lastUpdate: Date }>(() => {
-    const initial = { count: 1, lastUpdate: new Date() };
+  const [activeUsers, setActiveUsers] = useState<{ 
+    count: number; 
+    lastUpdate: Date; 
+    users: string[]; 
+  }>(() => {
+    const initial = { 
+      count: 1, 
+      lastUpdate: new Date(),
+      users: [sessionId] // 현재 사용자를 기본 사용자 목록에 추가
+    };
     console.log(`👥 [useUserSession] 활성 사용자 초기값:`, initial);
     return initial;
   });
@@ -28,13 +46,15 @@ export const useUserSession = () => {
           userId: userId || sessionId,
           sessionId,
           action,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          // 현재 활성 사용자 목록 전송
+          activeUsers: activeUsers.users
         })
       }).catch(() => console.log('사용자 활동 알림 실패'));
     } catch (error) {
       // 네트워크 오류 무시
     }
-  }, [sessionId]);
+  }, [sessionId, activeUsers.users]);
 
   // 활성 사용자 수 확인
   const checkActiveUsers = useCallback(async () => {
@@ -67,7 +87,8 @@ export const useUserSession = () => {
         // API 실패 시 기본값 1명 유지
         setActiveUsers({
           count: 1,
-          lastUpdate: new Date()
+          lastUpdate: new Date(),
+          users: [sessionId]
         });
         console.log(`🔌 [${timestamp}] API 실패로 기본값 1명 설정`);
         return;
@@ -82,11 +103,23 @@ export const useUserSession = () => {
         
         if (result.success) {
           const userCount = result.activeUserCount || 1;
+          const userList = result.users || [sessionId];
+          
+          // 현재 사용자가 목록에 없으면 추가
+          if (!userList.includes(sessionId)) {
+            userList.push(sessionId);
+          }
+          
           setActiveUsers({
             count: userCount,
-            lastUpdate: new Date()
+            lastUpdate: new Date(),
+            users: userList
           });
-          console.log(`✅ [${timestamp}] 활성 사용자 수 업데이트: ${userCount}명`);
+          
+          console.log(`✅ [${timestamp}] 활성 사용자 수 업데이트:`, {
+            count: userCount,
+            users: userList
+          });
         } else {
           console.log(`❌ [${timestamp}] API 응답에서 success=false`);
         }
@@ -99,7 +132,8 @@ export const useUserSession = () => {
           console.log(`🔧 [${timestamp}] 로컬 개발 환경 감지 - 기본값 1명 설정`);
           setActiveUsers({
             count: 1,
-            lastUpdate: new Date()
+            lastUpdate: new Date(),
+            users: [sessionId]
           });
           return;
         }
@@ -116,7 +150,8 @@ export const useUserSession = () => {
       // 네트워크 오류 시 기본값 1명 유지
       setActiveUsers({
         count: 1,
-        lastUpdate: new Date()
+        lastUpdate: new Date(),
+        users: [sessionId]
       });
       console.log(`🔌 [${timestamp}] 네트워크 오류로 기본값 1명 설정`);
     }
@@ -146,7 +181,7 @@ export const useUserSession = () => {
   }, [checkActiveUsers, notifyUserAction]);
 
   // hasMultipleUsers 상태 계산 및 로깅
-  const hasMultipleUsers = activeUsers.count > 1;
+  const hasMultipleUsers = activeUsers.count > 1 && activeUsers.users.length > 1;
   const isMultipleUsersRef = useRef(hasMultipleUsers);
   
   // 다중 사용자 상태 변화 감지
