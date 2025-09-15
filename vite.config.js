@@ -2,63 +2,20 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
-    plugins: [
-        react(),
-        {
-            name: 'mock-api',
-            configureServer: function (server) {
-                server.middlewares.use('/api/project', function (req, res, next) {
-                    if (req.method === 'GET') {
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({
-                            success: true,
-                            projectData: {
-                                projectPhases: [
-                                    {
-                                        id: 'phase-service-planning',
-                                        title: 'Service Planning (서비스 기획)',
-                                        tasks: []
-                                    }
-                                ],
-                                logs: []
-                            }
-                        }));
-                    }
-                    else if (req.method === 'POST') {
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ success: true }));
-                    }
-                    else {
-                        next();
-                    }
-                });
-                server.middlewares.use('/api/backup', function (req, res, next) {
-                    if (req.method === 'GET') {
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({
-                            success: true,
-                            data: {
-                                equipmentData: [],
-                                logData: [],
-                                logArchive: [],
-                                formFields: [],
-                                categoryCodes: [],
-                                geminiApiKey: null
-                            }
-                        }));
-                    }
-                    else if (req.method === 'POST') {
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ success: true }));
-                    }
-                    else {
-                        next();
-                    }
-                });
-            }
-        }
-    ],
+    plugins: [react()],
     server: {
-        port: 5173
+        port: 5173,
+        proxy: {
+            '/api': {
+                target: 'https://pj.crazyshot.kr',
+                changeOrigin: true,
+                secure: true,
+                configure: function (proxy, _options) {
+                    proxy.on('error', function (err, _req, _res) {
+                        console.log('로컬 API 프록시 오류, 클라우드 서버로 연결:', err.message);
+                    });
+                },
+            },
+        },
     }
 });

@@ -12,8 +12,8 @@ export const useProjectSync = (
   options: ProjectSyncOptions = {}
 ) => {
   const {
-    autoSave = true,
-    saveInterval = 5000 // 5초마다 버전 체크 (성능 개선)
+    autoSave = false, // 자동 저장 완전 비활성화 (트래픽 급증 방지)
+    saveInterval = 300000 // 5분마다 버전 체크 (긴급 트래픽 최적화)
   } = options;
 
   // 버전 관리를 위한 상태
