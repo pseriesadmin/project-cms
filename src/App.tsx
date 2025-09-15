@@ -136,9 +136,11 @@ const App: React.FC = () => {
     if (status.hasMultipleUsers && !showUserSnackbar) {
       console.log(`📢 [App] 다중 사용자 감지! 경고 스낵바 표시 시작`);
       setShowUserSnackbar(true);
-      // 지속적 표시 (수동 닫기 필요)
+    } else if (!status.hasMultipleUsers && showUserSnackbar) {
+      console.log(`📢 [App] 단일 사용자 감지! 경고 스낵바 자동 해제`);
+      setShowUserSnackbar(false);
     }
-  }, [status.hasMultipleUsers, status.activeUserCount, showUserSnackbar]);
+  }, [status.hasMultipleUsers, showUserSnackbar]);
 
   // 다중 사용자 환경에서 데이터 변경 시 추가 확인
   const confirmDataChange = useCallback((action: string) => {
