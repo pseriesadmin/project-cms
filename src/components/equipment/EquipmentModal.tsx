@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Equipment, FormField, CategoryCode } from '../../types';
 import { useGeminiAI } from '../../hooks/useGeminiAI';
+import { useEditState } from '../../hooks/useEditState';
 import QRCode from 'qrcode';
 
 interface EquipmentModalProps {
@@ -33,6 +34,9 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     getApiKey,
     setError
   } = useGeminiAI();
+  
+  // 편집 상태 관리
+  const { startEditing, stopEditing } = useEditState();
 
   useEffect(() => {
     if (equipment) {
@@ -71,6 +75,9 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   const activeFields = formFields.filter(field => field.active !== false);
 
   const handleInputChange = (name: string, value: any) => {
+    // 편집 시작 알림
+    startEditing();
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -128,6 +135,9 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       onSubmit(formData as Equipment);
       console.log('🔍 [DEBUG] onSubmit 호출 완료');
       
+      // 편집 상태 종료
+      stopEditing();
+      
       // 수정 모드였다면 상세보기 모드로 자동 전환
       if (equipment && internalIsEditing) {
         setInternalIsEditing(false);
@@ -184,6 +194,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
         <div className="flex gap-2">
           <div className="w-1/3">
             <select
+              name="categoryCode"
               value={formData.categoryCode || ''}
               onChange={(e) => handleInputChange('categoryCode', e.target.value)}
               className="mt-1 block w-full rounded-md border-stone-300 shadow-sm p-2 text-sm"
@@ -199,6 +210,8 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
           <div className="flex-1">
             <input
               type="text"
+              name={field.name}
+              id={`equipment-${field.name}-input`}
               value={value}
               onChange={(e) => {
                 // 영문, 숫자 조합 10자 제한
@@ -219,19 +232,14 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     if (field.type === 'textarea') {
       return (
         <textarea
-          value={Array.isArray(value) ? value.join(', ') : value}
-          onChange={(e) => {
-            if (field.name === 'features') {
-              const features = e.target.value.split(',').map(s => s.trim()).filter(s => s);
-              handleInputChange(field.name, features);
-            } else {
-              handleInputChange(field.name, e.target.value);
-            }
-          }}
+          name={field.name}
+          id={`equipment-${field.name}-textarea`}
+          value={value}
+          onChange={(e) => handleInputChange(field.name, e.target.value)}
           className="mt-1 block w-full rounded-md border-stone-300 shadow-sm p-2 text-sm"
           disabled={field.disabledOnEdit && !!equipment}
           required={field.required}
-          rows={3}
+          placeholder={`${field.label} 입력`}
         />
       );
     }
@@ -241,6 +249,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
         <div className="relative">
           <input
             type="text"
+            name={field.name}
             value={value ? value.toLocaleString() : ''}
             onChange={(e) => {
               const numericValue = parseInt(e.target.value.replace(/[^0-9]/g, ''), 10) || 0;
@@ -311,6 +320,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
         <div className="relative">
           <input
             type="date"
+            name={field.name}
             value={value}
             onChange={(e) => handleInputChange(field.name, e.target.value)}
             className="mt-1 block w-full rounded-md border-stone-300 shadow-sm p-2 text-sm pr-10"
@@ -329,12 +339,13 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     return (
       <input
         type={field.type}
+        name={field.name}
         value={value}
         onChange={(e) => handleInputChange(field.name, e.target.value)}
         className="mt-1 block w-full rounded-md border-stone-300 shadow-sm p-2 text-sm"
         disabled={field.disabledOnEdit && !!equipment}
         required={field.required}
-        placeholder={field.type === 'url' ? 'https://example.com' : ''}
+        placeholder={`${field.label} 입력`}
       />
     );
   };
@@ -426,7 +437,10 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
               )}
             </div>
             <button 
-              onClick={onClose}
+              onClick={() => {
+                stopEditing(); // 편집 상태 종료
+                onClose();
+              }}
               className="text-stone-500 hover:text-stone-800 text-2xl"
             >
               &times;

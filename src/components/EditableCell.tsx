@@ -34,13 +34,29 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, onSave, multi
   const handleSave = () => {
     if (currentValue !== value) {
         onSave(currentValue.trim());
+        
+        // 글로벌 스마트 동기화 트리거 (저장 시 즉시 반영)
+        const triggerSmartSync = (window as any).triggerSmartSync;
+        if (typeof triggerSmartSync === 'function') {
+          triggerSmartSync();
+        }
     }
     setIsEditing(false);
   };
   
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !multiline) {
-      handleSave();
+    // 다중 라인 입력에서 Shift+Enter로 줄바꿈, 일반 Enter로 저장
+    if (e.key === 'Enter') {
+      if (multiline && e.shiftKey) {
+        // Shift+Enter: 줄바꿈 (기본 동작 유지)
+        return;
+      }
+      
+      // 일반 Enter: 저장 및 동기화 (단일/다중 라인 모두 적용)
+      if (currentValue !== value) {
+        onSave(currentValue.trim());
+      }
+      setIsEditing(false);
     } else if (e.key === 'Escape') {
       setCurrentValue(value);
       setIsEditing(false);

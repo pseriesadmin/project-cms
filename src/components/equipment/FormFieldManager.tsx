@@ -514,6 +514,7 @@ export const FormFieldManager: React.FC<FormFieldManagerProps> = ({
                 </label>
                 <input
                   type="text"
+                  id="field-name-input"
                   value={newFieldData.name}
                   onChange={(e) => setNewFieldData({...newFieldData, name: e.target.value})}
                   className={`block w-full rounded-md border border-stone-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:ring-1 p-3 text-sm ${
@@ -536,6 +537,7 @@ export const FormFieldManager: React.FC<FormFieldManagerProps> = ({
                 </label>
                 <input
                   type="text"
+                  id="field-label-input"
                   value={newFieldData.label}
                   onChange={(e) => setNewFieldData({...newFieldData, label: e.target.value})}
                   className="block w-full rounded-md border border-stone-300 bg-white shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:ring-1 p-3 text-sm"

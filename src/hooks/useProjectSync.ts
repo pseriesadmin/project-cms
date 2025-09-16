@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ProjectData } from '../types';
 import { useRealtimeBackup } from './useRealtimeBackup';
+import { isCurrentlyEditing } from './useEditState';
 
 interface ProjectSyncOptions {
   autoRestore?: boolean;
@@ -8,6 +9,7 @@ interface ProjectSyncOptions {
   autoSave?: boolean;
   saveInterval?: number;
   pauseSync?: boolean; // 트래픽 최적화: 비활성 상태에서 동기화 일시 중단
+  syncStrategy?: 'debounce' | 'immediate'; // 동기화 전략 선택
 }
 
 // 안전한 날짜 변환 유틸리티 함수
@@ -38,7 +40,8 @@ export const useProjectSync = (
     autoSave = false, // 자동 저장 비활성화 (수동 백업 사용)
     autoRestore = true, // 자동 복원 동기화 활성화
     syncInterval = 60000, // 60초마다 동기화 체크
-    pauseSync = false // 트래픽 최적화: 동기화 일시 중단 제어
+    pauseSync = false, // 트래픽 최적화: 동기화 일시 중단 제어
+    syncStrategy = 'debounce' // 기본값: 디바운스 전략
     // saveInterval 제거 - 사용하지 않음
   } = options;
 
@@ -53,7 +56,7 @@ export const useProjectSync = (
         const parsedData = JSON.parse(savedData);
         // 데이터 구조 유효성 검사
         if (parsedData && Array.isArray(parsedData.projectPhases)) {
-          return parsedData;
+        return parsedData;
         }
       }
       
@@ -186,6 +189,12 @@ export const useProjectSync = (
       return;
     }
     
+    // 편집 중 데이터 보호: 강제 동기화가 아닌 경우 편집 상태 확인
+    if (!forceSync && isCurrentlyEditing()) {
+      console.log('🛡️ [useProjectSync] 현재 편집 중 - 클라우드 복원 일시 중단');
+      return;
+    }
+    
     if (showLoading) {
       setIsSyncing(true);
       console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시');
@@ -290,17 +299,30 @@ export const useProjectSync = (
   // 백업 디바운싱을 위한 타이머 관리
   const backupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // 디바운스된 클라우드 백업
-  const debouncedCloudSave = useCallback((data: ProjectData) => {
-    if (backupTimeoutRef.current) {
-      clearTimeout(backupTimeoutRef.current);
+  // 향상된 동기화: 전략별 클라우드 백업
+  const smartCloudSave = useCallback((data: ProjectData, forceImmediate = false) => {
+    if (syncStrategy === 'immediate' || forceImmediate) {
+      // 즉시 동기화: 로컬과 클라우드 병렬 처리
+      Promise.all([
+        Promise.resolve(), // 로컬은 이미 저장됨
+        cloudSave(data)
+      ]).then(() => {
+        console.log('⚡ [useProjectSync] 즉시 동기화 완료');
+      }).catch(error => {
+        console.error('❌ [useProjectSync] 즉시 동기화 실패:', error);
+      });
+    } else {
+      // 디바운스 전략 (기본값)
+      if (backupTimeoutRef.current) {
+        clearTimeout(backupTimeoutRef.current);
+      }
+      
+      backupTimeoutRef.current = setTimeout(() => {
+        cloudSave(data);
+        console.log('📁 [useProjectSync] 디바운스된 클라우드 백업 실행');
+      }, 2000); // 2초 디바운스
     }
-    
-    backupTimeoutRef.current = setTimeout(() => {
-      cloudSave(data);
-      console.log('📁 [useProjectSync] 디바운스된 클라우드 백업 실행');
-    }, 2000); // 2초 디바운스
-  }, [cloudSave]);
+  }, [cloudSave, syncStrategy]);
 
   // 데이터 업데이트 및 자동 저장 (버전 관리 포함, 트래픽 최적화)
   const updateProjectData = useCallback((updater: (draft: ProjectData) => void | ProjectData) => {
@@ -329,17 +351,17 @@ export const useProjectSync = (
         if (autoSave) {
           try {
             saveToLocal(updatedData);
-            debouncedCloudSave(updatedData); // 디바운스된 클라우드 백업
-            console.log('📁 [useProjectSync] 로컬 저장 + 디바운스 클라우드 백업');
+            smartCloudSave(updatedData); // 향상된 동기화 전략
+            console.log(`📁 [useProjectSync] 로컬 저장 + ${syncStrategy} 클라우드 백업`);
           } catch (error) {
             console.error('저장 실패:', error);
           }
         } else {
-          // 자동 저장 비활성화 시에도 로컬 저장 및 디바운스 클라우드 백업
+          // 자동 저장 비활성화 시에도 로컬 저장 및 향상된 클라우드 백업
           try {
             saveToLocal(updatedData);
-            debouncedCloudSave(updatedData); // 디바운스된 클라우드 백업
-            console.log('📁 [useProjectSync] 로컬 저장 + 디바운스 클라우드 백업 (자동 저장 비활성화)');
+            smartCloudSave(updatedData); // 향상된 동기화 전략
+            console.log(`📁 [useProjectSync] 로컬 저장 + ${syncStrategy} 클라우드 백업 (자동 저장 비활성화)`);
           } catch (error) {
             console.error('저장 실패:', error);
           }
@@ -349,7 +371,7 @@ export const useProjectSync = (
       }
       return currentState;
     });
-  }, [autoSave, saveToLocal, debouncedCloudSave, generateVersion]);
+  }, [autoSave, saveToLocal, smartCloudSave, generateVersion]);
 
   // 초기 로드 시 최신 버전 체크 및 복원 (로딩 표시 포함)
   useEffect(() => {
@@ -383,9 +405,19 @@ export const useProjectSync = (
 
   // 스마트 동기화: 필요 시점 감지하여 강제 동기화 실행
   const triggerSmartSync = useCallback(() => {
-    console.log('🚀 [useProjectSync] 스마트 동기화 트리거 - 강제 실행');
-    checkAndAutoRestore(false, true); // forceSync = true로 즉시 동기화
-  }, [checkAndAutoRestore]);
+    console.log('🚀 [useProjectSync] 스마트 동기화 트리거 - 로컬 데이터 즉시 백업');
+    // 현재 로컬 데이터를 즉시 클라우드에 백업 (트래픽 최소화)
+    const currentData = localStorage.getItem('crazyshot_project_data');
+    if (currentData) {
+      try {
+        const parsedData = JSON.parse(currentData);
+        smartCloudSave(parsedData, true); // forceImmediate = true로 즉시 백업 실행
+      } catch (error) {
+        console.error('❌ [useProjectSync] 스마트 동기화 중 데이터 파싱 오류:', error);
+      }
+    }
+  }, [smartCloudSave]);
+
 
   return {
     projectData,

@@ -65,11 +65,11 @@ export const useUserSession = () => {
       } catch (error) {
         console.error(`❌ [useUserSession] 하트비트 전송 실패:`, error);
         // 네트워크 오류 시 로컬 상태 유지
-        setActiveUsers(prev => ({
-          ...prev,
-          count: 1,
-          users: [sessionId]
-        }));
+    setActiveUsers(prev => ({
+      ...prev,
+      count: 1,
+      users: [sessionId]
+    }));
       }
     };
 
@@ -394,7 +394,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
       
       // 실제 오류만 콘솔에 출력
       if (!errorMessage.includes('데이터가 없습니다') && !errorMessage.includes('404')) {
-        console.error(`❌ 클라우드 복원 실패 (${dataType}):`, error);
+      console.error(`❌ 클라우드 복원 실패 (${dataType}):`, error);
       }
       
       // 데이터 없음 상황은 오류가 아닌 null 반환

@@ -86,7 +86,9 @@ const App: React.FC = () => {
     activeUserCount: activeUsers.count 
   };
 
-  // 프로젝트 데이터 동기화 (트래픽 최적화 적용)
+  // 향상된 동기화 전략: 다중 사용자 환경에 따라 동적 설정
+  
+  // 프로젝트 데이터 동기화 (향상된 동기화 전략 적용)
   const {
     projectData,
     isSyncing, // 초기 복원 로딩 상태 
@@ -99,7 +101,8 @@ const App: React.FC = () => {
     currentVersion,
     triggerSmartSync
   } = useProjectSync(initialData, { 
-    pauseSync: !isActive // 비활성 상태에서 동기화 일시 중단
+    pauseSync: !isActive, // 비활성 상태에서 동기화 일시 중단
+    syncStrategy: hasMultipleUsers ? 'immediate' : 'debounce' // 동적 동기화 전략
   });
   
   // 자동 복원 동기화 상태 확인 (자동 백업은 비활성화)
@@ -150,9 +153,18 @@ const App: React.FC = () => {
           console.warn('⚠️ [App] 도메인 첫 진입 클라우드 복원 실패:', error);
         }
       }, 500);
+
+      // 글로벌 스마트 동기화 트리거 함수 추가
+      (window as any).triggerSmartSync = () => {
+        console.log('🚀 [App] 글로벌 스마트 동기화 트리거');
+        triggerSmartSync();
+      };
       
       isInitialLoad = false;
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        delete (window as any).triggerSmartSync;
+      };
     }
   }, []); // 빈 의존성 배열 - 첫 렌더링에만 실행
 
@@ -169,11 +181,18 @@ const App: React.FC = () => {
     if (status.hasMultipleUsers && !showUserSnackbar) {
       console.log(`📢 [App] 다중 사용자 감지! 경고 스낵바 표시 시작`);
       setShowUserSnackbar(true);
+      
+      // 다중 사용자 환경에서 즉시 동기화 전략 적용됨
+      console.log('⚡ [App] 다중 사용자 환경 - 즉시 동기화 전략 적용');
+      
       // 스마트 동기화: 다중 사용자 감지 시 즉시 동기화
       triggerSmartSync();
     } else if (!status.hasMultipleUsers && showUserSnackbar) {
       console.log(`📢 [App] 단일 사용자 감지! 경고 스낵바 자동 해제`);
       setShowUserSnackbar(false);
+      
+      // 단일 사용자 환경에서 디바운스 전략 적용됨
+      console.log('🔄 [App] 단일 사용자 환경 - 디바운스 전략 적용');
     }
   }, [status.hasMultipleUsers, showUserSnackbar, triggerSmartSync]);
 
@@ -646,18 +665,25 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // 개발용: 현재 상태 확인 함수
+  // 개발용: 현재 상태 확인 함수 (향상된 동기화 정보 포함)
   const checkCurrentState = useCallback(() => {
     console.log('📊 현재 프로젝트 상태:', {
       projectPhases: projectData.projectPhases,
       phasesCount: projectData.projectPhases.length,
       logs: projectData.logs,
+      syncInfo: {
+        isActive: isActive,
+        hasMultipleUsers: status.hasMultipleUsers,
+        activeUserCount: status.activeUserCount,
+        isOnline: isOnline,
+        lastSyncTime: lastSyncTime
+      },
       localStorage: {
         crazyshot_project_data: localStorage.getItem('crazyshot_project_data'),
         project_version: localStorage.getItem('project_version')
       }
     });
-  }, [projectData]);
+  }, [projectData, isActive, status.hasMultipleUsers, status.activeUserCount, isOnline, lastSyncTime]);
 
   return (
     <>
