@@ -65,11 +65,11 @@ export const useUserSession = () => {
       } catch (error) {
         console.error(`❌ [useUserSession] 하트비트 전송 실패:`, error);
         // 네트워크 오류 시 로컬 상태 유지
-    setActiveUsers(prev => ({
-      ...prev,
-      count: 1,
-      users: [sessionId]
-    }));
+        setActiveUsers(prev => ({
+          ...prev,
+          count: 1,
+          users: [sessionId]
+        }));
       }
     };
 
@@ -135,71 +135,39 @@ interface BackupState {
   lastBackupTime: Date | null;
   backupError: string | null;
   pendingBackups: any[];
+  lastBackupData: any | null; // 마지막 백업 데이터 추적
 }
+
+// 디바운스 유틸리티 함수 추가
+const debounce = <F extends (...args: any[]) => any>(func: F, delay: number) => {
+  let timeoutId: NodeJS.Timeout | null = null;
+  return (...args: Parameters<F>) => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      func(...args);
+    }, delay);
+  };
+};
 
 export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
   const {
     dataType,
     userId = 'anonymous',
-    // autoSaveInterval 제거 - 자동 백업 완전 비활성화
-    maxRetries = 3,
-    retryDelay = 2000
+    maxRetries = 2, // 재시도 횟수 감소
+    retryDelay = 1000 // 대기 시간 단축
   } = options;
 
   const [backupState, setBackupState] = useState<BackupState>({
     isOnline: navigator.onLine,
     lastBackupTime: null,
     backupError: null,
-    pendingBackups: []
+    pendingBackups: [],
+    lastBackupData: null // 마지막 백업 데이터 추적
   });
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 네트워크 상태 감지
-  useEffect(() => {
-    const handleOnline = () => {
-      setBackupState(prev => ({ ...prev, isOnline: true, backupError: null }));
-      // 온라인 복구 시 대기 중인 백업 실행
-      processPendingBackups();
-    };
-
-    const handleOffline = () => {
-      setBackupState(prev => ({ ...prev, isOnline: false }));
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
-    };
-  }, []);
-
-  // 대기 중인 백업 처리
-  const processPendingBackups = useCallback(async () => {
-    if (!backupState.isOnline || backupState.pendingBackups.length === 0) return;
-
-    const { pendingBackups } = backupState;
-    const latestBackup = pendingBackups[pendingBackups.length - 1]; // 최신 백업만 처리
-
-    try {
-      await performBackup(latestBackup.data, latestBackup);
-      setBackupState(prev => ({ 
-        ...prev, 
-        pendingBackups: [],
-        lastBackupTime: new Date(),
-        backupError: null
-      }));
-    } catch (error) {
-      console.error('대기 백업 처리 실패:', error);
-    }
-  }, [backupState.isOnline, backupState.pendingBackups]);
-
-  // 실제 백업 수행
+  // 실제 백업 수행 함수
   const performBackup = useCallback(async (
     data: T, 
     options: { 
@@ -251,11 +219,11 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
     } catch (error) {
       console.error(`❌ 백업 실패 (${dataType}):`, error);
       
-      // 재시도 로직
+      // 재시도 로직 최소화
       if (retryCount < maxRetries && backupState.isOnline) {
         retryTimeoutRef.current = setTimeout(() => {
           performBackup(data, options, retryCount + 1);
-        }, retryDelay * (retryCount + 1)); // 지수 백오프
+        }, retryDelay * (retryCount + 1));
         return;
       }
       
@@ -263,58 +231,77 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
     }
   }, [dataType, userId, maxRetries, retryDelay, backupState.isOnline]);
 
-  // 백업 실행 (네트워크 상태에 따른 처리)
+  // 조건부 백업 로직
+  const shouldPerformBackup = useCallback((newData: T) => {
+    const { lastBackupData } = backupState;
+    
+    // 데이터 실질적 변경 여부 확인 (JSON 문자열 비교)
+    return !lastBackupData || 
+           JSON.stringify(newData) !== JSON.stringify(lastBackupData);
+  }, [backupState.lastBackupData]);
+
+  // 디바운스 백업 함수
+  const debouncedBackup = useCallback(
+    debounce(async (data: T, options: { 
+      backupType?: 'AUTO' | 'MANUAL', 
+      backupSource?: string 
+    } = {}) => {
+      // 실질적 변경 데이터만 백업
+      if (shouldPerformBackup(data)) {
+        try {
+          await performBackup(data, options);
+          
+          // 마지막 백업 데이터 업데이트
+          setBackupState(prev => ({
+            ...prev,
+            lastBackupTime: new Date(),
+            lastBackupData: data,
+            backupError: null,
+            pendingBackups: []
+          }));
+        } catch (error) {
+          console.warn('🚨 디바운스 백업 실패:', error);
+        }
+      }
+    }, 2000), // 2초 디바운스
+    [performBackup, shouldPerformBackup]
+  );
+
+  // 기존 백업 실행 함수 수정 (사용자 활동 상태 기반)
   const saveToCloud = useCallback(async (data: T, options: { 
     backupType?: 'AUTO' | 'MANUAL', 
-    backupSource?: string 
+    backupSource?: string,
+    isUserActive?: boolean
   } = {}) => {
     const { 
       backupType = 'AUTO', 
-      backupSource = '자동 백업' 
+      backupSource = '자동 백업',
+      isUserActive = true
     } = options;
 
-    try {
-      if (!backupState.isOnline) {
-        // 오프라인 시 대기 큐에 추가
-        setBackupState(prev => ({
-          ...prev,
-          pendingBackups: [...prev.pendingBackups.slice(-4), { 
-            data, 
-            backupType, 
-            backupSource 
-          }]
-        }));
-        console.log('📴 오프라인 상태 - 백업을 대기열에 추가');
-        return;
-      }
+    // 사용자 비활성 상태에서는 동기화 완전 중단
+    if (!isUserActive && backupType === 'AUTO') {
+      console.log('🛑 [useRealtimeBackup] 사용자 비활성 상태 - 자동 백업 중단');
+      return;
+    }
 
-      await performBackup(data, { backupType, backupSource });
-      
+    // 온라인 상태에서만 디바운스 백업 트리거
+    if (backupState.isOnline) {
+      debouncedBackup(data, { backupType, backupSource });
+    } else {
+      // 오프라인 시 최대 4개 대기열 유지
       setBackupState(prev => ({
         ...prev,
-        lastBackupTime: new Date(),
-        backupError: null
-      }));
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
-      
-      setBackupState(prev => ({
-        ...prev,
-        backupError: errorMessage,
         pendingBackups: [...prev.pendingBackups.slice(-4), { 
           data, 
           backupType, 
           backupSource 
         }]
       }));
-      
-      // 사용자에게 알림 (선택적)
-      console.warn('⚠️ 실시간 백업 실패, 로컬 저장으로 대체:', errorMessage);
     }
-  }, [backupState.isOnline, performBackup]);
+  }, [backupState.isOnline, debouncedBackup]);
 
-  // 복원 실행 (캐시 무시 및 오류 처리 강화)
+  // 복원 및 기타 함수들 (기존 코드 유지)
   const restoreFromCloud = useCallback(async (ignoreCacheOption = false): Promise<T | null> => {
     try {
       if (!backupState.isOnline) {

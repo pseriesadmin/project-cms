@@ -218,6 +218,10 @@ const App: React.FC = () => {
   }, [recentActions.length, hasMultipleUsers]);
 
   const handleUpdatePhase = useCallback((phaseId: string, updates: Partial<ProjectPhase>) => {
+    if (!isOnline) {
+      alert('🚨 데이터 편집을 위해서는 인터넷 연결이 필요합니다.');
+      return;
+    }
     if (!confirmDataChange('워크플로우 수정')) return;
     
     updateProjectData(draft => {
@@ -226,16 +230,21 @@ const App: React.FC = () => {
         Object.assign(phase, updates);
         // 사용자 활동 알림
         notifyUserAction(`프로젝트 단계 '${phase.title}' 수정`);
-        // 스마트 동기화: 데이터 변경 시 다중 사용자 환경에서 동기화 트리거
-        if (hasMultipleUsers) {
-          triggerSmartSync();
-        }
-        // 클라우드 백업은 updateProjectData 내부에서 자동 실행됨
+        // 사용자 활성 상태 기반 클라우드 백업
+        cloudBackup(draft, { 
+          backupType: 'AUTO', 
+          backupSource: '워크플로우 수정',
+          isUserActive: isActive
+        });
       }
     });
-  }, [updateProjectData, notifyUserAction, confirmDataChange, hasMultipleUsers, triggerSmartSync]);
+  }, [updateProjectData, notifyUserAction, confirmDataChange, isOnline, cloudBackup, isActive]);
 
   const handleAddPhase = useCallback(() => {
+    if (!isOnline) {
+      alert('🚨 데이터 편집을 위해서는 인터넷 연결이 필요합니다.');
+      return;
+    }
     if (!confirmDataChange('새 워크플로우 추가')) return;
     
     updateProjectData(draft => {
@@ -247,13 +256,14 @@ const App: React.FC = () => {
       draft.projectPhases.push(newPhase);
       // 사용자 활동 알림
       notifyUserAction('새 워크플로우 추가');
-      // 스마트 동기화: 데이터 변경 시 다중 사용자 환경에서 동기화 트리거
-      if (hasMultipleUsers) {
-        triggerSmartSync();
-      }
-      // 클라우드 백업은 updateProjectData 내부에서 자동 실행됨
+        // 사용자 활성 상태 기반 클라우드 백업
+        cloudBackup(draft, { 
+          backupType: 'AUTO', 
+          backupSource: '워크플로우 추가',
+          isUserActive: isActive
+        });
     });
-  }, [updateProjectData, notifyUserAction, confirmDataChange, hasMultipleUsers, triggerSmartSync]);
+  }, [updateProjectData, notifyUserAction, confirmDataChange, isOnline, cloudBackup, isActive]);
 
   const handleDeletePhase = useCallback((phaseId: string) => {
     setPhaseToDelete(phaseId);
@@ -277,21 +287,30 @@ const App: React.FC = () => {
   }, [phaseToDelete, updateProjectData, confirmDataChange]);
 
   const handleUpdateTask = useCallback((phaseId: string, taskId: string, updates: Partial<Task>) => {
+    if (!isOnline) {
+      alert('🚨 데이터 편집을 위해서는 인터넷 연결이 필요합니다.');
+      return;
+    }
     updateProjectData(draft => {
       const phase = draft.projectPhases.find((p: ProjectPhase) => p.id === phaseId);
       if (!phase) return;
       const task = phase.tasks.find((t: Task) => t.id === taskId);
       if (!task) return;
       Object.assign(task, updates);
-      // 스마트 동기화: 데이터 변경 시 다중 사용자 환경에서 동기화 트리거
-      if (hasMultipleUsers) {
-        triggerSmartSync();
-      }
-      // 클라우드 백업은 updateProjectData 내부에서 자동 실행됨
+      // 사용자 활성 상태 기반 클라우드 백업
+      cloudBackup(draft, { 
+        backupType: 'AUTO', 
+        backupSource: '작업 수정',
+        isUserActive: isActive
+      });
     });
-  }, [updateProjectData, hasMultipleUsers, triggerSmartSync]);
+  }, [updateProjectData, isOnline, cloudBackup, isActive]);
 
   const handleAddTask = useCallback((phaseId: string) => {
+    if (!isOnline) {
+      alert('🚨 데이터 편집을 위해서는 인터넷 연결이 필요합니다.');
+      return;
+    }
     updateProjectData(draft => {
       const phase = draft.projectPhases.find((p: ProjectPhase) => p.id === phaseId);
       if (!phase) return;
@@ -305,13 +324,14 @@ const App: React.FC = () => {
         issues: ''
       };
       phase.tasks.push(newTask);
-      // 스마트 동기화: 데이터 변경 시 다중 사용자 환경에서 동기화 트리거
-      if (hasMultipleUsers) {
-        triggerSmartSync();
-      }
-      // 클라우드 백업은 updateProjectData 내부에서 자동 실행됨
+      // 사용자 활성 상태 기반 클라우드 백업
+      cloudBackup(draft, { 
+        backupType: 'AUTO', 
+        backupSource: '작업 추가',
+        isUserActive: isActive
+      });
     });
-  }, [updateProjectData, hasMultipleUsers, triggerSmartSync]);
+  }, [updateProjectData, isOnline, cloudBackup, isActive]);
 
   const handleDeleteTask = useCallback((phaseId: string, taskId: string) => {
     setTaskToDelete({ phaseId, taskId });
@@ -457,15 +477,19 @@ const App: React.FC = () => {
   };
 
   const handleCloudBackup = async () => {
+    if (!isOnline) {
+      alert('🚨 클라우드 백업을 위해서는 인터넷 연결이 필요합니다.');
+      return;
+    }
     try {
-      // 백업 로그 생성
+      // 백업 로그 생성 (누적 보존)
       const backupLog = {
         timestamp: new Date().toLocaleString('ko-KR'),
         message: '클라우드 백업 실행',
         version: `backup-${Date.now()}`
       };
 
-      // 로그 추가된 프로젝트 데이터 생성
+      // 기존 로그와 새 로그를 모두 보존하는 누적 데이터 생성
       const updatedProjectData = {
         ...projectData,
         logs: [
@@ -474,7 +498,7 @@ const App: React.FC = () => {
         ]
       };
 
-      // 클라우드 백업 실행 (백업 유형 메타데이터 추가)
+      // 클라우드 백업 실행 (누적 보존 모드)
       await cloudBackup(updatedProjectData, {
         backupType: 'MANUAL',
         backupSource: '클라우드 백업 버튼'
@@ -491,12 +515,18 @@ const App: React.FC = () => {
   };
 
   const handleCloudRestore = async () => {
+    if (!isOnline) {
+      alert('🚨 클라우드 복원을 위해서는 인터넷 연결이 필요합니다.');
+      return;
+    }
     try {
       const restoredData = await cloudRestore();
       if (restoredData) {
+        // 모든 로그 누적 보존 (기존 + 복원 + 복원 로그)
         const restoredDataWithLog = {
           ...restoredData,
           logs: [
+            ...(projectData.logs || []),
             ...(restoredData.logs || []),
             {
               timestamp: getTimestamp(),
@@ -608,13 +638,19 @@ const App: React.FC = () => {
   };
 
   const confirmRestore = useCallback(() => {
+    if (!isOnline) {
+      alert('🚨 데이터 복원을 위해서는 인터넷 연결이 필요합니다.');
+      return;
+    }
     if (!dataToRestore) {
       return;
     }
     try {
+      // 파일 복원 시에도 기존 로그 누적 보존
       const restoredDataWithLog = {
         ...dataToRestore,
         logs: [
+          ...(projectData.logs || []),
           ...dataToRestore.logs,
           {
             timestamp: getTimestamp(),
@@ -634,7 +670,7 @@ const App: React.FC = () => {
     } catch (error) {
       alert(`데이터 복원 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     }
-  }, [dataToRestore, updateProjectData, getTimestamp]);
+  }, [dataToRestore, updateProjectData, getTimestamp, isOnline, projectData.logs, currentVersion]);
 
   const cancelRestore = useCallback(() => {
     setDataToRestore(null);

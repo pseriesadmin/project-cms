@@ -143,158 +143,107 @@ export const useProjectSync = (
   }, [autoRestore, syncInterval]);
 
   // 동시 사용자 간 안전한 동기화 메커니즘
-  const safeMergeData = useCallback((localData: ProjectData, cloudData: ProjectData) => {
-    // 타임스탬프 기반 최신성 판단
-    const getLatestTimestamp = (data: ProjectData) => {
-      if (!data.logs || data.logs.length === 0) return 0;
-      return Math.max(...data.logs.map(log => new Date(log.timestamp).getTime()));
+  const safeMergeData = (localData: ProjectData, cloudData: ProjectData) => {
+    // 로그 누적 보존 로직 강화
+    const mergedLogs = [
+      ...(localData.logs || []),
+      ...(cloudData.logs || [])
+    ];
+
+    // 중복 로그 제거 (선택적)
+    const uniqueLogs = Array.from(new Set(mergedLogs.map(JSON.stringify)))
+      .map(log => JSON.parse(log));
+
+    // 프로젝트 단계 병합 로직
+    const mergedPhases = [
+      ...localData.projectPhases,
+      ...cloudData.projectPhases
+    ].filter(
+      (phase, index, self) => 
+        index === self.findIndex(p => p.id === phase.id)
+    );
+
+    return {
+      projectPhases: mergedPhases,
+      logs: uniqueLogs
     };
+  };
 
-    const localTimestamp = getLatestTimestamp(localData);
-    const cloudTimestamp = getLatestTimestamp(cloudData);
-
-    console.log('🔍 [useProjectSync] 데이터 병합 분석:', {
-      localTimestamp: safeToISOString(localTimestamp),
-      cloudTimestamp: safeToISOString(cloudTimestamp),
-      localPhases: localData.projectPhases?.length || 0,
-      cloudPhases: cloudData.projectPhases?.length || 0
-    });
-
-    // 최신 데이터 선택
-    const newerData = localTimestamp >= cloudTimestamp ? localData : cloudData;
-    // olderData 변수 제거
-
-    // 스마트 병합: 최신 데이터 기반으로 누락된 항목 추가
-    const mergedData = {
-      ...newerData,
-      logs: [
-        ...newerData.logs,
-        {
-          timestamp: safeToISOString(),
-          message: `데이터 병합 완료 (로컬:${localTimestamp > cloudTimestamp ? '최신' : '이전'}, 클라우드:${cloudTimestamp > localTimestamp ? '최신' : '이전'})`,
-          type: 'MERGE_SYNC',
-          version: `merge-${Date.now()}`
-        }
-      ]
-    };
-
-    return mergedData;
-  }, []);
-
-  // 버전 체크 및 자동 복원 함수 (트래픽 최적화 적용)
+  // 트래픽 최소화를 위한 동기화 전략
   const checkAndAutoRestore = useCallback(async (showLoading = false, forceSync = false) => {
-    // 트래픽 최적화: 동기화 일시 중단 상태에서는 강제 동기화가 아닌 경우 중단
-    if (pauseSync && !forceSync) {
-      console.log('🛑 [useProjectSync] 동기화 일시 중단 상태 - 트래픽 최적화');
+    // 트래픽 최적화: 동기화 조건 엄격화
+    if ((pauseSync && !forceSync) || !backupState.isOnline) {
+      console.log('🛑 [useProjectSync] 동기화 중단 - 트래픽 최적화');
       return;
     }
     
-    // 편집 중 데이터 보호: 강제 동기화가 아닌 경우 편집 상태 확인
+    // 편집 중 데이터 보호 및 불필요한 동기화 방지
     if (!forceSync && isCurrentlyEditing()) {
-      console.log('🛡️ [useProjectSync] 현재 편집 중 - 클라우드 복원 일시 중단');
+      console.log('🛡️ [useProjectSync] 현재 편집 중 - 동기화 일시 중단');
       return;
     }
     
-    if (showLoading) {
-      setIsSyncing(true);
-      console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시');
+    // 마지막 동기화 시간 기반 동기화 제한
+    const MIN_SYNC_INTERVAL = 300000; // 5분
+    const currentTime = Date.now();
+    const lastSyncTimestamp = lastSyncTime ? new Date(lastSyncTime).getTime() : 0;
+    
+    if (!forceSync && (currentTime - lastSyncTimestamp) < MIN_SYNC_INTERVAL) {
+      console.log('⏳ [useProjectSync] 최소 동기화 간격 미충족 - 동기화 건너뜀');
+      return;
     }
+
     try {
       const localData = localStorage.getItem('crazyshot_project_data');
       let parsedLocalData: ProjectData | null = null;
       
-      let localDataParseFailed = false;
-      
+      // 로컬 데이터 파싱 및 유효성 검사
       try {
         parsedLocalData = localData ? JSON.parse(localData) : null;
       } catch (error) {
-        console.error('🚨 [useProjectSync] 로컬 데이터 파싱 오류 - 클라우드 복원 우선 시도:', error);
+        console.error('🚨 [useProjectSync] 로컬 데이터 파싱 오류:', error);
         parsedLocalData = null;
-        localDataParseFailed = true; // 파싱 실패 플래그
       }
 
-      // 로컬 데이터 파싱 실패 또는 브라우저 캐시 초기화 대비: 클라우드 복원 우선 시도
-      const cloudData = await cloudRestore(localDataParseFailed || !localData);
+      // 클라우드 복원 시 최소 페이로드 요청
+      const cloudData = await cloudRestore(false, {
+        partialRestore: true,
+        priorityFields: ['version', 'logs']
+      });
       
-      // 로컬과 클라우드 데이터 모두 존재하는 경우 안전한 병합
+      // 데이터 병합 및 동기화 로직 최적화
       if (parsedLocalData && cloudData) {
-        console.log('🔀 [useProjectSync] 로컬-클라우드 데이터 병합 시작');
         const mergedData = safeMergeData(parsedLocalData, cloudData);
         
+        // 실질적인 변경이 있는 경우에만 상태 및 저장소 업데이트
+        if (JSON.stringify(mergedData) !== JSON.stringify(parsedLocalData)) {
         setProjectData(mergedData);
         localStorage.setItem('crazyshot_project_data', JSON.stringify(mergedData));
         
-        // 병합된 데이터를 클라우드에 백업
-        await cloudSave(mergedData);
-        
-        console.log('✅ [useProjectSync] 데이터 병합 및 동기화 완료');
-        return;
-      }
-      
-      // 클라우드 데이터만 존재하는 경우
-      if (cloudData && !parsedLocalData) {
-        console.log('📥 [useProjectSync] 클라우드 데이터 복원');
-        setProjectData(cloudData);
-        localStorage.setItem('crazyshot_project_data', JSON.stringify(cloudData));
-        return;
-      }
-      
-      // 로컬 데이터만 존재하는 경우
-      if (parsedLocalData && !cloudData) {
-        console.log('💾 [useProjectSync] 로컬 데이터 클라우드 백업');
-        setProjectData(parsedLocalData);
-        await cloudSave(parsedLocalData);
-        return;
-      }
-      
-      // 데이터가 없는 경우 기본 데이터 생성 (매우 제한적 조건)
-      if (!parsedLocalData && !cloudData) {
-        // 추가 안전장치: 다른 사용자 세션 확인
-        const hasActiveUsers = localStorage.getItem('crazyshot_session_id') && 
-                              JSON.parse(localStorage.getItem('user_session_data') || '{}').hasMultipleUsers;
-        
-        if (!hasActiveUsers) {
-          const defaultProjectData = {
-            projectPhases: [],
-            logs: [{
-              timestamp: new Date().toISOString(),
-              message: '초기 프로젝트 데이터 생성 (단일 사용자 환경)',
-              type: 'SYSTEM_INIT',
-              version: `v${Date.now()}-initial`
-            }]
-          };
+          // 변경 시에만 클라우드 백업
+          await cloudSave(mergedData, { 
+            backupType: 'SYNC', 
+            backupSource: '자동 동기화' 
+          });
           
-          console.log('🌱 [useProjectSync] 안전한 초기 데이터 생성 (단일 사용자)');
-          setProjectData(defaultProjectData);
-          localStorage.setItem('crazyshot_project_data', JSON.stringify(defaultProjectData));
-          await cloudSave(defaultProjectData);
+          setLastSyncTime(new Date());
+          console.log('✅ [useProjectSync] 선택적 데이터 동기화 완료');
         } else {
-          console.log('🔒 [useProjectSync] 다중 사용자 환경 - 초기 데이터 생성 방지');
-          // 다중 사용자 환경에서는 초기 데이터 생성하지 않음
-          const safeEmptyData = {
-            projectPhases: [],
-            logs: [{
-              timestamp: new Date().toISOString(),
-              message: '데이터 보호 모드 - 기존 사용자 데이터 보호',
-              type: 'DATA_PROTECTION',
-              version: `protection-${Date.now()}`
-            }]
-          };
-          
-          setProjectData(safeEmptyData);
-          localStorage.setItem('crazyshot_project_data', JSON.stringify(safeEmptyData));
+          console.log('🔄 [useProjectSync] 변경 사항 없음 - 동기화 생략');
         }
       }
-      
     } catch (error) {
-      console.error('동기화 중 오류:', error);
-    } finally {
-      if (showLoading) {
-        setIsSyncing(false);
-        console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제');
-      }
+      console.error('❌ [useProjectSync] 동기화 중 오류:', error);
     }
-  }, [cloudRestore, pauseSync, cloudSave, safeMergeData]);
+  }, [
+    pauseSync, 
+    backupState.isOnline, 
+    isCurrentlyEditing, 
+    cloudRestore, 
+    cloudSave, 
+    safeMergeData,
+    lastSyncTime
+  ]);
 
   // 백업 디바운싱을 위한 타이머 관리
   const backupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -350,18 +299,32 @@ export const useProjectSync = (
         
         if (autoSave) {
           try {
+            // 1. 즉시 로컬 저장
             saveToLocal(updatedData);
-            smartCloudSave(updatedData); // 향상된 동기화 전략
-            console.log(`📁 [useProjectSync] 로컬 저장 + ${syncStrategy} 클라우드 백업`);
+            
+            // 2. 조건부 즉시 클라우드 백업 (온라인 상태 + 사용자 활성 상태)
+            if (backupState.isOnline && !pauseSync) {
+              cloudSave(updatedData);
+              console.log('📁 [useProjectSync] 즉시 로컬 저장 + 즉시 클라우드 백업');
+            } else {
+              console.log('📁 [useProjectSync] 즉시 로컬 저장 (클라우드 백업 조건 미충족)');
+            }
           } catch (error) {
             console.error('저장 실패:', error);
           }
         } else {
-          // 자동 저장 비활성화 시에도 로컬 저장 및 향상된 클라우드 백업
+          // 자동 저장 비활성화 시에도 로컬 저장 및 조건부 클라우드 백업
           try {
+            // 1. 즉시 로컬 저장
             saveToLocal(updatedData);
-            smartCloudSave(updatedData); // 향상된 동기화 전략
-            console.log(`📁 [useProjectSync] 로컬 저장 + ${syncStrategy} 클라우드 백업 (자동 저장 비활성화)`);
+            
+            // 2. 조건부 즉시 클라우드 백업 (온라인 상태 + 사용자 활성 상태)
+            if (backupState.isOnline && !pauseSync) {
+              cloudSave(updatedData);
+              console.log('📁 [useProjectSync] 즉시 로컬 저장 + 즉시 클라우드 백업 (자동 저장 비활성화)');
+            } else {
+              console.log('📁 [useProjectSync] 즉시 로컬 저장 (클라우드 백업 조건 미충족, 자동 저장 비활성화)');
+            }
           } catch (error) {
             console.error('저장 실패:', error);
           }
@@ -417,6 +380,92 @@ export const useProjectSync = (
       }
     }
   }, [smartCloudSave]);
+
+  // 트래픽 최소화를 위한 복원 전략 개선
+  const restoreFromCloud = useCallback(async (
+    ignoreCacheOption = false, 
+    options: { 
+      partialRestore?: boolean; 
+      priorityFields?: string[]; 
+    } = {}
+  ): Promise<ProjectData | null> => {
+    const { 
+      partialRestore = false, 
+      priorityFields = ['projectPhases', 'logs'] 
+    } = options;
+
+    try {
+      // 네트워크 상태 및 온라인 확인
+      if (!backupState.isOnline) {
+        console.warn('🚫 오프라인 상태 - 클라우드 복원 불가');
+        return null;
+      }
+
+      // 캐시 무시 옵션 처리
+      const cacheParam = ignoreCacheOption ? `&nocache=${Date.now()}` : '';
+      const apiEndpoint = `/api/project?userId=${localStorage.getItem('userId') || 'anonymous'}${cacheParam}`;
+
+      // 부분 복원을 위한 쿼리 파라미터 추가
+      const restoreEndpoint = partialRestore 
+        ? `${apiEndpoint}&partialFields=${priorityFields.join(',')}`
+        : apiEndpoint;
+
+      const response = await fetch(restoreEndpoint, {
+        headers: {
+          'Cache-Control': ignoreCacheOption ? 'no-cache' : 'default',
+          'X-Minimal-Payload': 'true' // 서버에 최소 페이로드 요청
+        }
+      });
+
+      // 응답 상태 처리
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log('📭 저장된 프로젝트 데이터 없음');
+          return null;
+        }
+        throw new Error(`복원 실패: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // 데이터 유효성 검사
+      if (!result.success) {
+        if (result.isEmpty) {
+          console.log('📭 프로젝트 데이터 비어있음');
+          return null;
+        }
+        throw new Error(result.error || '복원 처리 실패');
+      }
+
+      // 부분 복원 시 기존 데이터와 병합
+      const restoredData = result.projectData;
+      if (partialRestore && projectData) {
+        priorityFields.forEach(field => {
+          if (restoredData[field]) {
+            projectData[field] = restoredData[field];
+          }
+        });
+        return projectData;
+      }
+
+      console.log('✅ 클라우드 복원 성공');
+      return restoredData;
+
+    } catch (error) {
+      console.error('❌ 클라우드 복원 중 오류:', error);
+      
+      // 오류 유형에 따른 세분화된 처리
+      if (error.message.includes('네트워크')) {
+        console.warn('🌐 네트워크 연결 문제');
+      }
+
+      return null;
+    }
+  }, [
+    localStorage.getItem('userId'), 
+    backupState.isOnline, 
+    projectData
+  ]);
 
 
   return {
