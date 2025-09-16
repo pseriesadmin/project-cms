@@ -47,25 +47,41 @@ async function handleProjectSave(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const projectId = `project_${userId}_${Date.now()}`;
+  // 백업 메타데이터 생성 (동기화 로그 포함)
+  const backupMetadata = {
+    backupId: `backup_${userId}_${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    userId,
+    version: projectData.version || 'unknown',
+    syncLogs: [
+      ...(projectData.logs || []),
+      {
+        timestamp: new Date().toISOString(),
+        message: '클라우드 백업 동기화',
+        type: 'BACKUP'
+      }
+    ]
+  };
+
+  // 백업 파일 구조 정의
+  const backupFile = {
+    projectData,
+    backupMetadata
+  };
   
   // 메모리에 프로젝트 데이터 저장 (실제로는 데이터베이스에 저장)
-  projectStorage.set(projectId, {
-    ...projectData,
-    savedAt: new Date().toISOString(),
-    userId
-  });
+  projectStorage.set(backupMetadata.backupId, backupFile);
 
-  console.log(`✅ 프로젝트 데이터 클라우드 저장: ${projectId}`);
+  console.log(`✅ 프로젝트 데이터 클라우드 저장: ${backupMetadata.backupId}`);
   
   return res.status(200).json({
     success: true,
-    projectId,
+    backupId: backupMetadata.backupId,
     message: '프로젝트 데이터가 성공적으로 저장되었습니다.',
-    savedAt: new Date().toISOString(),
+    savedAt: backupMetadata.timestamp,
     dataSize: {
       워크플로우: projectData.projectPhases?.length || 0,
-      로그: projectData.logs?.length || 0
+      로그: backupMetadata.syncLogs?.length || 0
     }
   });
 }
@@ -74,20 +90,16 @@ async function handleProjectRetrieve(req: VercelRequest, res: VercelResponse) {
   const { userId } = req.query;
 
   if (!userId) {
-    return res.status(400).json({ 
-      success: false,
-      error: '사용자 ID가 필요합니다.' 
-    });
+    return res.status(400).json({ error: '사용자 ID가 필요합니다.' });
   }
 
   // 해당 사용자의 최신 프로젝트 데이터 찾기
   const userProjects = Array.from(projectStorage.entries())
-    .filter(([_, data]) => data.userId === userId)
-    .sort((a, b) => new Date(b[1].savedAt).getTime() - new Date(a[1].savedAt).getTime());
+    .filter(([_, data]) => data.backupMetadata.userId === userId)
+    .sort((a, b) => new Date(b[1].backupMetadata.timestamp).getTime() - new Date(a[1].backupMetadata.timestamp).getTime());
 
   if (userProjects.length === 0) {
-    // 404 대신 성공 응답으로 빈 데이터 반환 (클라이언트 오류 방지)
-    console.log(`📝 [API] 사용자 ${userId}의 저장된 데이터 없음 - 빈 응답 반환`);
+    // 저장된 프로젝트 데이터가 없을 경우 200 OK로 빈 데이터 반환
     return res.status(200).json({ 
       success: false,
       error: '저장된 프로젝트 데이터가 없습니다.',
@@ -98,12 +110,28 @@ async function handleProjectRetrieve(req: VercelRequest, res: VercelResponse) {
 
   const [latestProjectId, latestProjectData] = userProjects[0];
 
+  // 복원 로그 추가
+  const restorationLog = {
+    timestamp: new Date().toISOString(),
+    message: '클라우드 복원 동기화',
+    type: 'RESTORE'
+  };
+
+  // 복원 로그 추가된 프로젝트 데이터
+  const restoredProjectData = {
+    ...latestProjectData.projectData,
+    logs: [
+      ...(latestProjectData.projectData.logs || []),
+      restorationLog
+    ]
+  };
+
   console.log(`✅ 프로젝트 데이터 클라우드 복원: ${latestProjectId}`);
   
   return res.status(200).json({
     success: true,
     projectId: latestProjectId,
-    projectData: latestProjectData,
+    projectData: restoredProjectData,
     retrievedAt: new Date().toISOString()
   });
 }

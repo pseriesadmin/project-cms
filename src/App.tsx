@@ -417,9 +417,31 @@ const App: React.FC = () => {
 
   const handleCloudBackup = async () => {
     try {
-      await cloudBackup(projectData);
+      // 백업 로그 생성
+      const backupLog = {
+        timestamp: new Date().toLocaleString('ko-KR'),
+        message: '클라우드 백업 실행',
+        version: `backup-${Date.now()}`
+      };
+
+      // 로그 추가된 프로젝트 데이터 생성
+      const updatedProjectData = {
+        ...projectData,
+        logs: [
+          ...projectData.logs, 
+          backupLog
+        ]
+      };
+
+      // 클라우드 백업 실행
+      await cloudBackup(updatedProjectData);
+      
+      // 로컬 상태 업데이트
+      updateProjectData(() => updatedProjectData);
+      
       alert('클라우드 백업이 완료되었습니다.');
     } catch (error) {
+      console.error('클라우드 백업 중 오류:', error);
       alert('클라우드 백업 중 오류가 발생했습니다.');
     }
   };
