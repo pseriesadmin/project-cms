@@ -234,26 +234,68 @@ export const useProjectSync = (
         // 클라우드 복원 시 최소 페이로드 요청
         const cloudData = await performCloudRestore(false);
         
-        // 데이터 병합 및 동기화 로직 최적화
+        // 데이터 복원 및 동기화 로직 개선 (브라우저 캐시 삭제 대응)
         if (parsedLocalData && cloudData) {
+          // 케이스 1: 로컬과 클라우드 데이터 모두 존재 - 병합 처리
           const mergedData = safeMergeData(parsedLocalData, cloudData);
           
-          // 실질적인 변경이 있는 경우에만 상태 및 저장소 업데이트
           if (JSON.stringify(mergedData) !== JSON.stringify(parsedLocalData)) {
             setProjectData(mergedData);
             localStorage.setItem('crazyshot_project_data', JSON.stringify(mergedData));
             
-            // 변경 시에만 클라우드 백업
             await cloudSave(mergedData, { 
               backupType: 'AUTO', 
-              backupSource: '자동 동기화' 
+              backupSource: '자동 동기화 - 병합' 
             });
             
             setLastSyncTime(new Date());
-            console.log('✅ [useProjectSync] 선택적 데이터 동기화 완료');
+            console.log('✅ [useProjectSync] 데이터 병합 동기화 완료');
           } else {
             console.log('🔄 [useProjectSync] 변경 사항 없음 - 동기화 생략');
           }
+        } else if (!parsedLocalData && cloudData) {
+          // 케이스 2: 로컬 데이터 없음 + 클라우드 데이터 존재 (브라우저 캐시 삭제 시나리오)
+          console.log('🔄 [useProjectSync] 브라우저 캐시 삭제 감지 - 클라우드 데이터 복원');
+          setProjectData(cloudData);
+          localStorage.setItem('crazyshot_project_data', JSON.stringify(cloudData));
+          setLastSyncTime(new Date());
+          console.log('✅ [useProjectSync] 클라우드 데이터 복원 완료');
+        } else if (parsedLocalData && !cloudData) {
+          // 케이스 3: 로컬 데이터 존재 + 클라우드 데이터 없음 - 로컬 데이터를 클라우드에 백업
+          console.log('🔄 [useProjectSync] 클라우드 데이터 없음 - 로컬 데이터 백업');
+          setProjectData(parsedLocalData);
+          
+          await cloudSave(parsedLocalData, { 
+            backupType: 'AUTO', 
+            backupSource: '로컬 데이터 백업' 
+          });
+          
+          setLastSyncTime(new Date());
+          console.log('✅ [useProjectSync] 로컬 데이터 클라우드 백업 완료');
+        } else {
+          // 케이스 4: 로컬과 클라우드 데이터 모두 없음 - 기본 데이터 생성
+          console.log('⚠️ [useProjectSync] 모든 데이터 소스 없음 - 기본 데이터 생성');
+          const defaultData = {
+            projectPhases: [],
+            logs: [{
+              timestamp: new Date().toLocaleString('ko-KR'),
+              message: '시스템 초기화 - 새로운 프로젝트 시작',
+              version: `v${Date.now()}-init`
+            }],
+            version: `v${Date.now()}-init`
+          };
+          
+          setProjectData(defaultData);
+          localStorage.setItem('crazyshot_project_data', JSON.stringify(defaultData));
+          
+          // 기본 데이터를 클라우드에 백업
+          await cloudSave(defaultData, { 
+            backupType: 'AUTO', 
+            backupSource: '초기 데이터 생성' 
+          });
+          
+          setLastSyncTime(new Date());
+          console.log('✅ [useProjectSync] 기본 데이터 생성 및 백업 완료');
         }
       } catch (error) {
         console.error('❌ [useProjectSync] 동기화 중 오류:', error);
@@ -301,26 +343,40 @@ export const useProjectSync = (
              // 클라우드 복원 시 최소 페이로드 요청
              const cloudData = await performCloudRestore(false);
             
-            // 데이터 병합 및 동기화 로직 최적화
+            // 데이터 복원 및 동기화 로직 개선 (주기적 동기화)
             if (parsedLocalData && cloudData) {
               const mergedData = safeMergeData(parsedLocalData, cloudData);
               
-              // 실질적인 변경이 있는 경우에만 상태 및 저장소 업데이트
               if (JSON.stringify(mergedData) !== JSON.stringify(parsedLocalData)) {
                 setProjectData(mergedData);
                 localStorage.setItem('crazyshot_project_data', JSON.stringify(mergedData));
                 
-               // 변경 시에만 클라우드 백업
                await cloudSave(mergedData, { 
                  backupType: 'AUTO', 
-                 backupSource: '자동 동기화' 
+                 backupSource: '주기적 동기화 - 병합' 
                });
                 
                 setLastSyncTime(new Date());
-                console.log('✅ [useProjectSync] 선택적 데이터 동기화 완료');
+                console.log('✅ [useProjectSync] 주기적 데이터 병합 완료');
               } else {
                 console.log('🔄 [useProjectSync] 변경 사항 없음 - 동기화 생략');
               }
+            } else if (!parsedLocalData && cloudData) {
+              // 로컬 데이터 손실 감지 - 클라우드에서 복원
+              console.log('🔄 [useProjectSync] 로컬 데이터 손실 감지 - 클라우드 복원');
+              setProjectData(cloudData);
+              localStorage.setItem('crazyshot_project_data', JSON.stringify(cloudData));
+              setLastSyncTime(new Date());
+              console.log('✅ [useProjectSync] 주기적 클라우드 복원 완료');
+            } else if (parsedLocalData && !cloudData) {
+              // 클라우드 데이터 손실 감지 - 로컬에서 백업
+              console.log('🔄 [useProjectSync] 클라우드 데이터 손실 감지 - 로컬 백업');
+              await cloudSave(parsedLocalData, { 
+                backupType: 'AUTO', 
+                backupSource: '주기적 로컬 백업' 
+              });
+              setLastSyncTime(new Date());
+              console.log('✅ [useProjectSync] 주기적 로컬 백업 완료');
             }
           } catch (error) {
             console.error('❌ [useProjectSync] 동기화 중 오류:', error);
