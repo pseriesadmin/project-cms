@@ -35,6 +35,7 @@ export interface LogEntry {
 export interface ProjectData {
   projectPhases: ProjectPhase[];
   logs: LogEntry[];
+  version?: string;
 }
 
 // 장비 현황 관련 타입 정의
