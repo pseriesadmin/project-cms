@@ -187,7 +187,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
     const latestBackup = pendingBackups[pendingBackups.length - 1]; // 최신 백업만 처리
 
     try {
-      await performBackup(latestBackup);
+      await performBackup(latestBackup.data, latestBackup);
       setBackupState(prev => ({ 
         ...prev, 
         pendingBackups: [],
@@ -200,13 +200,35 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
   }, [backupState.isOnline, backupState.pendingBackups]);
 
   // 실제 백업 수행
-  const performBackup = useCallback(async (data: T, retryCount = 0): Promise<void> => {
-    const apiEndpoint = dataType === 'project' ? '/api/project' : '/api/backup';
-    
+  const performBackup = useCallback(async (
+    data: T, 
+    options: { 
+      backupType?: 'AUTO' | 'MANUAL', 
+      backupSource?: string 
+    } = {}, 
+    retryCount = 0
+  ): Promise<void> => {
+    const { 
+      backupType = 'AUTO', 
+      backupSource = '자동 백업' 
+    } = options;
+
     try {
+      const apiEndpoint = dataType === 'project' ? '/api/project' : '/api/backup';
+      
       const payload = dataType === 'project' 
-        ? { projectData: data, userId }
-        : { ...data as any, userId };
+        ? { 
+            projectData: data, 
+            userId, 
+            backupType, 
+            backupSource 
+          }
+        : { 
+            ...data as any, 
+            userId, 
+            backupType, 
+            backupSource 
+          };
 
       const response = await fetch(apiEndpoint, {
         method: 'POST',
@@ -224,7 +246,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
         throw new Error(result.error || '백업 처리 실패');
       }
 
-      console.log(`✅ 실시간 백업 성공 (${dataType}):`, result);
+      console.log(`✅ 실시간 백업 성공 (${dataType}, 유형: ${backupType}):`, result);
       
     } catch (error) {
       console.error(`❌ 백업 실패 (${dataType}):`, error);
@@ -232,7 +254,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
       // 재시도 로직
       if (retryCount < maxRetries && backupState.isOnline) {
         retryTimeoutRef.current = setTimeout(() => {
-          performBackup(data, retryCount + 1);
+          performBackup(data, options, retryCount + 1);
         }, retryDelay * (retryCount + 1)); // 지수 백오프
         return;
       }
@@ -242,19 +264,31 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
   }, [dataType, userId, maxRetries, retryDelay, backupState.isOnline]);
 
   // 백업 실행 (네트워크 상태에 따른 처리)
-  const saveToCloud = useCallback(async (data: T) => {
+  const saveToCloud = useCallback(async (data: T, options: { 
+    backupType?: 'AUTO' | 'MANUAL', 
+    backupSource?: string 
+  } = {}) => {
+    const { 
+      backupType = 'AUTO', 
+      backupSource = '자동 백업' 
+    } = options;
+
     try {
       if (!backupState.isOnline) {
         // 오프라인 시 대기 큐에 추가
         setBackupState(prev => ({
           ...prev,
-          pendingBackups: [...prev.pendingBackups.slice(-4), data] // 최대 5개 유지
+          pendingBackups: [...prev.pendingBackups.slice(-4), { 
+            data, 
+            backupType, 
+            backupSource 
+          }]
         }));
         console.log('📴 오프라인 상태 - 백업을 대기열에 추가');
         return;
       }
 
-      await performBackup(data);
+      await performBackup(data, { backupType, backupSource });
       
       setBackupState(prev => ({
         ...prev,
@@ -268,7 +302,11 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
       setBackupState(prev => ({
         ...prev,
         backupError: errorMessage,
-        pendingBackups: [...prev.pendingBackups.slice(-4), data] // 실패 시에도 대기열에 추가
+        pendingBackups: [...prev.pendingBackups.slice(-4), { 
+          data, 
+          backupType, 
+          backupSource 
+        }]
       }));
       
       // 사용자에게 알림 (선택적)
@@ -276,11 +314,12 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
     }
   }, [backupState.isOnline, performBackup]);
 
-  // 복원 실행
+  // 복원 실행 (오류 처리 강화)
   const restoreFromCloud = useCallback(async (): Promise<T | null> => {
     try {
       if (!backupState.isOnline) {
-        throw new Error('네트워크 연결이 필요합니다.');
+        console.warn('오프라인 상태에서는 클라우드 복원을 사용할 수 없습니다.');
+        return null;
       }
 
       const apiEndpoint = dataType === 'project' 
@@ -290,21 +329,68 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
       const response = await fetch(apiEndpoint);
       
       if (!response.ok) {
+        // 404는 데이터 없음을 의미하므로 null 반환 (에러 없이)
+        if (response.status === 404) {
+          console.log(`📭 [useRealtimeBackup] 저장된 ${dataType} 데이터 없음 (404)`);
+          return null;
+        }
         throw new Error(`복원 실패: ${response.status} ${response.statusText}`);
       }
 
       const result = await response.json();
       
       if (!result.success) {
+        // success: false이지만 isEmpty: true인 경우는 정상 (데이터 없음)
+        if (result.isEmpty) {
+          console.log(`📭 [useRealtimeBackup] ${dataType} 데이터 없음 (빈 상태)`);
+          return null;
+        }
+        
+        // "저장된 프로젝트 데이터가 없습니다" 오류는 에러가 아닌 정상 상태로 처리
+        if (result.error && result.error.includes('저장된 프로젝트 데이터가 없습니다')) {
+          console.log(`📭 [useRealtimeBackup] ${dataType} 초기 상태 - 데이터 없음`);
+          
+          // 데이터 보호 플래그 확인
+          if (result.protectedData) {
+            console.log(`🔒 [useRealtimeBackup] 데이터 보호 모드 - 기존 사용자 데이터 보호`);
+          }
+          
+          return null;
+        }
+        
         throw new Error(result.error || '복원 처리 실패');
       }
 
-      console.log(`✅ 클라우드 복원 성공 (${dataType})`);
+      const restoredData = result.projectData || result.data;
       
-      return dataType === 'project' ? result.projectData : result.data;
+      if (restoredData) {
+        console.log(`✅ [useRealtimeBackup] ${dataType} 클라우드 복원 성공`);
+        return restoredData;
+      } else {
+        console.log(`📭 [useRealtimeBackup] ${dataType} 데이터 없음`);
+        return null;
+      }
       
     } catch (error) {
-      console.error(`❌ 클라우드 복원 실패 (${dataType}):`, error);
+      // 네트워크 오류나 실제 서버 오류만 로그에 표시
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
+      
+      // "저장된 프로젝트 데이터가 없습니다" 오류는 조용히 처리
+      if (errorMessage.includes('저장된 프로젝트 데이터가 없습니다')) {
+        console.log(`📭 [useRealtimeBackup] ${dataType} 초기 상태 - 데이터 없음`);
+        return null;
+      }
+      
+      // 실제 오류만 콘솔에 출력
+      if (!errorMessage.includes('데이터가 없습니다') && !errorMessage.includes('404')) {
+        console.error(`❌ 클라우드 복원 실패 (${dataType}):`, error);
+      }
+      
+      // 데이터 없음 상황은 오류가 아닌 null 반환
+      if (errorMessage.includes('데이터가 없습니다') || errorMessage.includes('404')) {
+        return null;
+      }
+      
       throw error;
     }
   }, [dataType, userId, backupState.isOnline]);

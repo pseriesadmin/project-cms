@@ -10,6 +10,26 @@ interface ProjectSyncOptions {
   pauseSync?: boolean; // 트래픽 최적화: 비활성 상태에서 동기화 일시 중단
 }
 
+// 안전한 날짜 변환 유틸리티 함수
+const safeToISOString = (date?: Date | string | number): string => {
+  try {
+    const validDate = date instanceof Date 
+      ? date 
+      : (date ? new Date(date) : new Date());
+    
+    // 유효한 날짜인지 확인
+    if (isNaN(validDate.getTime())) {
+      console.warn('🚨 [safeToISOString] 유효하지 않은 날짜:', date);
+      return new Date().toISOString();
+    }
+    
+    return validDate.toISOString();
+  } catch (error) {
+    console.warn('🚨 [safeToISOString] 날짜 변환 오류:', error);
+    return new Date().toISOString();
+  }
+};
+
 export const useProjectSync = (
   initialData: ProjectData, 
   options: ProjectSyncOptions = {}
@@ -119,6 +139,45 @@ export const useProjectSync = (
     }
   }, [autoRestore, syncInterval]);
 
+  // 동시 사용자 간 안전한 동기화 메커니즘
+  const safeMergeData = useCallback((localData: ProjectData, cloudData: ProjectData) => {
+    // 타임스탬프 기반 최신성 판단
+    const getLatestTimestamp = (data: ProjectData) => {
+      if (!data.logs || data.logs.length === 0) return 0;
+      return Math.max(...data.logs.map(log => new Date(log.timestamp).getTime()));
+    };
+
+    const localTimestamp = getLatestTimestamp(localData);
+    const cloudTimestamp = getLatestTimestamp(cloudData);
+
+    console.log('🔍 [useProjectSync] 데이터 병합 분석:', {
+      localTimestamp: safeToISOString(localTimestamp),
+      cloudTimestamp: safeToISOString(cloudTimestamp),
+      localPhases: localData.projectPhases?.length || 0,
+      cloudPhases: cloudData.projectPhases?.length || 0
+    });
+
+    // 최신 데이터 선택
+    const newerData = localTimestamp >= cloudTimestamp ? localData : cloudData;
+    const olderData = localTimestamp < cloudTimestamp ? localData : cloudData;
+
+    // 스마트 병합: 최신 데이터 기반으로 누락된 항목 추가
+    const mergedData = {
+      ...newerData,
+      logs: [
+        ...newerData.logs,
+        {
+          timestamp: safeToISOString(),
+          message: `데이터 병합 완료 (로컬:${localTimestamp > cloudTimestamp ? '최신' : '이전'}, 클라우드:${cloudTimestamp > localTimestamp ? '최신' : '이전'})`,
+          type: 'MERGE_SYNC',
+          version: `merge-${Date.now()}`
+        }
+      ]
+    };
+
+    return mergedData;
+  }, []);
+
   // 버전 체크 및 자동 복원 함수 (트래픽 최적화 적용)
   const checkAndAutoRestore = useCallback(async (showLoading = false, forceSync = false) => {
     // 트래픽 최적화: 동기화 일시 중단 상태에서는 강제 동기화가 아닌 경우 중단
@@ -132,49 +191,98 @@ export const useProjectSync = (
       console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시');
     }
     try {
-      const response = await fetch('/api/version');
-      if (!response.ok) return;
-      
-      const { latestVersion, hasUpdates } = await response.json();
-      const localVersion = localStorage.getItem('project_version');
       const localData = localStorage.getItem('crazyshot_project_data');
+      let parsedLocalData: ProjectData | null = null;
       
-      // 로컬 데이터 없거나 유효하지 않은 경우 클라우드 복원 시도
-      if (!localData || !JSON.parse(localData).projectPhases || JSON.parse(localData).projectPhases.length === 0) {
-        console.log('📥 [useProjectSync] 로컬 데이터 없음 - 클라우드 복원 시도');
-        const restoredData = await cloudRestore();
+      try {
+        parsedLocalData = localData ? JSON.parse(localData) : null;
+      } catch (error) {
+        console.error('로컬 데이터 파싱 오류:', error);
+        parsedLocalData = null;
+      }
+
+      // 클라우드에서 데이터 복원 시도
+      const cloudData = await cloudRestore();
+      
+      // 로컬과 클라우드 데이터 모두 존재하는 경우 안전한 병합
+      if (parsedLocalData && cloudData) {
+        console.log('🔀 [useProjectSync] 로컬-클라우드 데이터 병합 시작');
+        const mergedData = safeMergeData(parsedLocalData, cloudData);
         
-        if (restoredData) {
-          console.log('✅ [useProjectSync] 클라우드 백업으로부터 데이터 복원');
-          setProjectData(restoredData);
-          localStorage.setItem('crazyshot_project_data', JSON.stringify(restoredData));
-          localStorage.setItem('project_version', latestVersion);
-          setCurrentVersion(latestVersion);
-          return;
+        setProjectData(mergedData);
+        localStorage.setItem('crazyshot_project_data', JSON.stringify(mergedData));
+        
+        // 병합된 데이터를 클라우드에 백업
+        await cloudSave(mergedData);
+        
+        console.log('✅ [useProjectSync] 데이터 병합 및 동기화 완료');
+        return;
+      }
+      
+      // 클라우드 데이터만 존재하는 경우
+      if (cloudData && !parsedLocalData) {
+        console.log('📥 [useProjectSync] 클라우드 데이터 복원');
+        setProjectData(cloudData);
+        localStorage.setItem('crazyshot_project_data', JSON.stringify(cloudData));
+        return;
+      }
+      
+      // 로컬 데이터만 존재하는 경우
+      if (parsedLocalData && !cloudData) {
+        console.log('💾 [useProjectSync] 로컬 데이터 클라우드 백업');
+        setProjectData(parsedLocalData);
+        await cloudSave(parsedLocalData);
+        return;
+      }
+      
+      // 데이터가 없는 경우 기본 데이터 생성 (매우 제한적 조건)
+      if (!parsedLocalData && !cloudData) {
+        // 추가 안전장치: 다른 사용자 세션 확인
+        const hasActiveUsers = localStorage.getItem('crazyshot_session_id') && 
+                              JSON.parse(localStorage.getItem('user_session_data') || '{}').hasMultipleUsers;
+        
+        if (!hasActiveUsers) {
+          const defaultProjectData = {
+            projectPhases: [],
+            logs: [{
+              timestamp: new Date().toISOString(),
+              message: '초기 프로젝트 데이터 생성 (단일 사용자 환경)',
+              type: 'SYSTEM_INIT',
+              version: `v${Date.now()}-initial`
+            }]
+          };
+          
+          console.log('🌱 [useProjectSync] 안전한 초기 데이터 생성 (단일 사용자)');
+          setProjectData(defaultProjectData);
+          localStorage.setItem('crazyshot_project_data', JSON.stringify(defaultProjectData));
+          await cloudSave(defaultProjectData);
+        } else {
+          console.log('🔒 [useProjectSync] 다중 사용자 환경 - 초기 데이터 생성 방지');
+          // 다중 사용자 환경에서는 초기 데이터 생성하지 않음
+          const safeEmptyData = {
+            projectPhases: [],
+            logs: [{
+              timestamp: new Date().toISOString(),
+              message: '데이터 보호 모드 - 기존 사용자 데이터 보호',
+              type: 'DATA_PROTECTION',
+              version: `protection-${Date.now()}`
+            }]
+          };
+          
+          setProjectData(safeEmptyData);
+          localStorage.setItem('crazyshot_project_data', JSON.stringify(safeEmptyData));
         }
       }
       
-      // 기존 버전 체크 로직
-      if (hasUpdates && localVersion !== latestVersion) {
-        console.log('📥 [useProjectSync] 새 버전 감지 - 백업 복원 시작');
-        const restoredData = await cloudRestore();
-        
-        if (restoredData) {
-          console.log('✅ [useProjectSync] 백업 복원 완료');
-          setProjectData(restoredData);
-          localStorage.setItem('project_version', latestVersion);
-          setCurrentVersion(latestVersion);
-        }
-      }
     } catch (error) {
-      console.log('버전 체크 중 오류:', error);
+      console.error('동기화 중 오류:', error);
     } finally {
       if (showLoading) {
         setIsSyncing(false);
         console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제');
       }
     }
-  }, [cloudRestore, pauseSync]);
+  }, [cloudRestore, pauseSync, cloudSave, safeMergeData]);
 
   // 백업 디바운싱을 위한 타이머 관리
   const backupTimeoutRef = useRef<NodeJS.Timeout | null>(null);

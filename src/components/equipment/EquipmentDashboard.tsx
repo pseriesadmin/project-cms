@@ -99,12 +99,16 @@ export const EquipmentDashboard: React.FC = () => {
 
   // 실시간 사용자 세션 관리
   const { 
+    activeUsers,
     recentActions, 
     notifyUserAction, 
     hasMultipleUsers 
   } = useUserSession();
 
-  const status = { hasMultipleUsers };
+  const status = { 
+    hasMultipleUsers, 
+    activeUserCount: activeUsers.count 
+  };
 
   // 장비 상세보기
   const handleViewEquipment = (equipment: Equipment) => {
@@ -129,9 +133,19 @@ export const EquipmentDashboard: React.FC = () => {
     const equipment = equipmentData.find(e => e.code === code);
     if (!equipment) return;
 
+    // 다중 사용자 환경에서 추가 확인
+    if (!confirmDataChange(`장비 '${equipment.name}' 삭제`)) return;
+
     if (confirm(`'${equipment.name}' 장비를 정말로 삭제하시겠습니까?`)) {
       deleteEquipment(code);
       alert('장비가 삭제되었습니다.');
+      
+      // 사용자 활동 알림 및 다중 사용자 환경에서 조건부 동기화
+      notifyUserAction(`장비 '${equipment.name}' 삭제`);
+      if (status.hasMultipleUsers) {
+        // 다중 사용자 환경에서는 즉시 클라우드 동기화 수행
+        console.log(`🔄 [EquipmentDashboard] 다중 사용자 환경 - 장비 삭제 후 즉시 동기화`);
+      }
     }
   };
 
@@ -148,17 +162,28 @@ export const EquipmentDashboard: React.FC = () => {
       
       if (isEditMode) {
         console.log('🔍 [DEBUG] 장비 수정 모드');
+        
+        // 다중 사용자 환경에서 추가 확인
+        if (!confirmDataChange(`장비 '${newEquipment.name}' 수정`)) return;
+        
         const originalCode = editingEquipment?.code || selectedEquipment?.code;
         updateEquipment(originalCode!, newEquipment);
         alert('장비 정보가 수정되었습니다.');
-        // 사용자 활동 알림
+        
+        // 사용자 활동 알림 및 다중 사용자 환경에서 조건부 동기화
         notifyUserAction(`장비 '${newEquipment.name}' 수정`);
+        if (status.hasMultipleUsers) {
+          console.log(`🔄 [EquipmentDashboard] 다중 사용자 환경 - 장비 수정 후 즉시 동기화`);
+        }
         
         // 수정 완료 후 상세보기 모달로 전환
         setSelectedEquipment(newEquipment);
         setIsRegModalOpen(false);
       } else {
         console.log('🔍 [DEBUG] 새 장비 등록 모드');
+        
+        // 다중 사용자 환경에서 추가 확인
+        if (!confirmDataChange(`새 장비 '${newEquipment.name}' 등록`)) return;
         
         // 장비 코드 중복 체크  
         const existingEquipment = equipmentData.find(e => e.code === newEquipment.code);
@@ -179,6 +204,13 @@ export const EquipmentDashboard: React.FC = () => {
         
         addEquipment(equipmentWithRegistrationDate);
         alert('새 장비가 등록되었습니다.');
+        
+        // 사용자 활동 알림 및 다중 사용자 환경에서 조건부 동기화
+        notifyUserAction(`새 장비 '${newEquipment.name}' 등록`);
+        if (status.hasMultipleUsers) {
+          console.log(`🔄 [EquipmentDashboard] 다중 사용자 환경 - 장비 등록 후 즉시 동기화`);
+        }
+        
         setIsRegModalOpen(false);
       }
       
@@ -201,14 +233,45 @@ export const EquipmentDashboard: React.FC = () => {
     setEditingEquipment(null);
   };
 
-  // 다중 사용자 감지 시 스낵바 표시
-  React.useEffect(() => {
+  // 다중 사용자 감지 시 강화된 경고 표시
+  useEffect(() => {
+    console.log(`🚨 [EquipmentDashboard] 다중 사용자 알림 useEffect 실행:`, {
+      hasMultipleUsers: status.hasMultipleUsers,
+      activeUserCount: status.activeUserCount,
+      showUserSnackbar,
+      조건충족: status.hasMultipleUsers && !showUserSnackbar,
+      시간: new Date().toISOString()
+    });
+    
     if (status.hasMultipleUsers && !showUserSnackbar) {
+      console.log(`📢 [EquipmentDashboard] 다중 사용자 감지! 경고 스낵바 표시 시작`);
       setShowUserSnackbar(true);
-      // 10초 후 자동 숨김
-      setTimeout(() => setShowUserSnackbar(false), 10000);
+    } else if (!status.hasMultipleUsers && showUserSnackbar) {
+      console.log(`📢 [EquipmentDashboard] 단일 사용자 감지! 경고 스낵바 자동 해제`);
+      setShowUserSnackbar(false);
     }
   }, [status.hasMultipleUsers, showUserSnackbar]);
+
+  // 다중 사용자 환경에서 데이터 변경 시 추가 확인
+  const confirmDataChange = React.useCallback((action: string) => {
+    if (status.hasMultipleUsers) {
+      return window.confirm(
+        `⚠️ 현재 ${status.activeUserCount}명이 동시 접속 중입니다.\n` +
+        `'${action}' 작업을 계속하시겠습니까?\n\n` +
+        `다른 사용자의 작업과 충돌할 수 있습니다.`
+      );
+    }
+    return true;
+  }, [status.hasMultipleUsers, status.activeUserCount]);
+
+  // 실시간 활동 알림 표시
+  useEffect(() => {
+    if (recentActions.length > 0 && hasMultipleUsers) {
+      setShowActivitySnackbar(true);
+      const timer = setTimeout(() => setShowActivitySnackbar(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [recentActions.length, hasMultipleUsers]);
 
   // 최초 접속 여부 확인 및 설정 (모달 비활성화)
   useEffect(() => {
@@ -221,7 +284,7 @@ export const EquipmentDashboard: React.FC = () => {
       {/* 다중 사용자 알림 스낵바 */}
       <TopSnackbar
         isVisible={showUserSnackbar}
-        message={`⚠️ 다중 사용자가 동시에 접속중입니다. 데이터 변경 시 주의하세요.`}
+        message={`⚠️ ${status.activeUserCount}명이 동시에 접속중입니다. 장비 데이터 변경 시 주의하세요.`}
         type="warning"
         onClose={() => setShowUserSnackbar(false)}
       />

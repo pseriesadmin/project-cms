@@ -433,8 +433,11 @@ const App: React.FC = () => {
         ]
       };
 
-      // 클라우드 백업 실행
-      await cloudBackup(updatedProjectData);
+      // 클라우드 백업 실행 (백업 유형 메타데이터 추가)
+      await cloudBackup(updatedProjectData, {
+        backupType: 'MANUAL',
+        backupSource: '클라우드 백업 버튼'
+      });
       
       // 로컬 상태 업데이트
       updateProjectData(() => updatedProjectData);
