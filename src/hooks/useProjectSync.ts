@@ -352,8 +352,8 @@ export const useProjectSync = (
     };
   }, [autoRestore, syncInterval, cloudRestore, cloudSave, safeMergeData]);
 
-  // 스마트 동기화: 필요 시점 감지하여 강제 동기화 실행
-  const triggerSmartSync = useCallback(() => {
+  // 스마트 동기화: 필요 시점 감지하여 강제 동기화 실행 (로컬스토리지 기반)
+  const triggerSmartSyncFromLocal = useCallback(() => {
     console.log('🚀 [useProjectSync] 스마트 동기화 트리거 - 로컬 데이터 즉시 백업');
     // 현재 로컬 데이터를 즉시 클라우드에 백업 (트래픽 최소화)
     const currentData = localStorage.getItem('crazyshot_project_data');
@@ -403,6 +403,7 @@ export const useProjectSync = (
     isOnline,
     backupState,
     currentVersion,
-    triggerSmartSync: () => smartCloudSave(projectData, true)
+    triggerSmartSync: () => smartCloudSave(projectData, true), // 현재 상태 기반 동기화
+    triggerSmartSyncFromLocal // 로컬스토리지 기반 동기화
   };
 };
