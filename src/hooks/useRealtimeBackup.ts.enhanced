@@ -1,0 +1,54 @@
+// 개선된 restoreFromCloud 함수
+const restoreFromCloud = useCallback(async (): Promise<T | null> => {
+  try {
+    if (!backupState.isOnline) {
+      throw new Error('네트워크 연결이 필요합니다.');
+    }
+
+    const apiEndpoint = dataType === 'project' 
+      ? `/api/project?userId=${userId}`
+      : `/api/backup`;
+
+    const response = await fetch(apiEndpoint);
+    
+    // 응답 상태에 따른 세분화된 처리
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log(`📝 [restoreFromCloud] 저장된 ${dataType} 데이터 없음 (404)`);
+        return null; // 404는 정상적인 상황으로 처리
+      }
+      throw new Error(`복원 실패: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    
+    // API 응답 구조 개선에 따른 처리
+    if (!result.success) {
+      if (result.isEmpty) {
+        console.log(`📝 [restoreFromCloud] ${dataType} 데이터 없음 - 초기 상태`);
+        return null; // 빈 데이터는 정상 상황
+      }
+      throw new Error(result.error || '복원 처리 실패');
+    }
+
+    console.log(`✅ 클라우드 복원 성공 (${dataType})`);
+    
+    return dataType === 'project' ? result.projectData : result.data;
+    
+  } catch (error) {
+    // 오류 유형별 로깅 개선
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.warn(`🌐 [restoreFromCloud] 네트워크 오류 - ${dataType} 복원 실패`);
+    } else if (error.message.includes('404')) {
+      console.log(`📝 [restoreFromCloud] ${dataType} 데이터 없음`);
+    } else {
+      console.error(`❌ 클라우드 복원 실패 (${dataType}):`, error);
+    }
+    
+    // 404나 빈 데이터의 경우 null 반환, 그 외는 에러 throw
+    if (error.message.includes('404') || error.message.includes('데이터 없음')) {
+      return null;
+    }
+    throw error;
+  }
+}, [dataType, userId, backupState.isOnline]);

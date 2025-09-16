@@ -23,11 +23,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return await handleProjectRetrieve(req, res);
       default:
         res.setHeader('Allow', ['POST', 'GET']);
-        return res.status(405).json({ error: `Method ${method} Not Allowed` });
+        return res.status(405).json({ 
+          success: false,
+          error: `Method ${method} Not Allowed` 
+        });
     }
   } catch (error) {
     console.error('❌ 프로젝트 API 오류:', error);
-    return res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    return res.status(500).json({ 
+      success: false,
+      error: '서버 오류가 발생했습니다.' 
+    });
   }
 }
 
@@ -35,7 +41,10 @@ async function handleProjectSave(req: VercelRequest, res: VercelResponse) {
   const { projectData, userId } = req.body;
 
   if (!projectData) {
-    return res.status(400).json({ error: '저장할 프로젝트 데이터가 없습니다.' });
+    return res.status(400).json({ 
+      success: false,
+      error: '저장할 프로젝트 데이터가 없습니다.' 
+    });
   }
 
   const projectId = `project_${userId}_${Date.now()}`;
@@ -65,7 +74,10 @@ async function handleProjectRetrieve(req: VercelRequest, res: VercelResponse) {
   const { userId } = req.query;
 
   if (!userId) {
-    return res.status(400).json({ error: '사용자 ID가 필요합니다.' });
+    return res.status(400).json({ 
+      success: false,
+      error: '사용자 ID가 필요합니다.' 
+    });
   }
 
   // 해당 사용자의 최신 프로젝트 데이터 찾기
@@ -74,7 +86,14 @@ async function handleProjectRetrieve(req: VercelRequest, res: VercelResponse) {
     .sort((a, b) => new Date(b[1].savedAt).getTime() - new Date(a[1].savedAt).getTime());
 
   if (userProjects.length === 0) {
-    return res.status(404).json({ error: '저장된 프로젝트 데이터가 없습니다.' });
+    // 404 대신 성공 응답으로 빈 데이터 반환 (클라이언트 오류 방지)
+    console.log(`📝 [API] 사용자 ${userId}의 저장된 데이터 없음 - 빈 응답 반환`);
+    return res.status(200).json({ 
+      success: false,
+      error: '저장된 프로젝트 데이터가 없습니다.',
+      projectData: null,
+      isEmpty: true
+    });
   }
 
   const [latestProjectId, latestProjectData] = userProjects[0];
@@ -88,4 +107,3 @@ async function handleProjectRetrieve(req: VercelRequest, res: VercelResponse) {
     retrievedAt: new Date().toISOString()
   });
 }
-

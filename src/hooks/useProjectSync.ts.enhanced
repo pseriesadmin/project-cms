@@ -1,0 +1,96 @@
+// 개선된 checkAndAutoRestore 함수
+const checkAndAutoRestore = useCallback(async (showLoading = false, forceSync = false) => {
+  // 트래픽 최적화: 동기화 일시 중단 상태에서는 강제 동기화가 아닌 경우 중단
+  if (pauseSync && !forceSync) {
+    console.log('🛑 [useProjectSync] 동기화 일시 중단 상태 - 트래픽 최적화');
+    return;
+  }
+  
+  if (showLoading) {
+    setIsSyncing(true);
+    console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시');
+  }
+  
+  try {
+    // 1. 버전 체크 API 호출
+    const response = await fetch('/api/version');
+    if (!response.ok) {
+      console.log('📝 [useProjectSync] 버전 체크 API 오류 - 로컬 데이터 사용');
+      return;
+    }
+    
+    const { latestVersion, hasUpdates } = await response.json();
+    const localVersion = localStorage.getItem('project_version');
+    const localData = localStorage.getItem('crazyshot_project_data');
+    
+    // 2. 로컬 데이터 검증 및 폴백 처리
+    const hasValidLocalData = localData && 
+      JSON.parse(localData).projectPhases && 
+      JSON.parse(localData).projectPhases.length > 0;
+    
+    // 3. 로컬 데이터 없는 경우 클라우드 복원 시도
+    if (!hasValidLocalData) {
+      console.log('📥 [useProjectSync] 로컬 데이터 없음 - 클라우드 복원 시도');
+      
+      try {
+        const restoredData = await cloudRestore();
+        
+        if (restoredData) {
+          console.log('✅ [useProjectSync] 클라우드 백업으로부터 데이터 복원');
+          setProjectData(restoredData);
+          localStorage.setItem('crazyshot_project_data', JSON.stringify(restoredData));
+          localStorage.setItem('project_version', latestVersion);
+          setCurrentVersion(latestVersion);
+          return;
+        } else {
+          // 클라우드에도 데이터 없음 - 기본 데이터 사용
+          console.log('📝 [useProjectSync] 클라우드에도 데이터 없음 - 기본 데이터로 초기화');
+          const defaultData = getSavedOrInitialData();
+          setProjectData(defaultData);
+          
+          // 첫 방문이므로 기본 데이터를 클라우드에 백업
+          try {
+            await cloudSave(defaultData);
+            console.log('💾 [useProjectSync] 기본 데이터 클라우드 백업 완료');
+          } catch (backupError) {
+            console.warn('⚠️ [useProjectSync] 기본 데이터 백업 실패:', backupError);
+          }
+          return;
+        }
+      } catch (restoreError) {
+        console.log('📝 [useProjectSync] 클라우드 복원 실패 - 기본 데이터 사용:', restoreError);
+        const defaultData = getSavedOrInitialData();
+        setProjectData(defaultData);
+        return;
+      }
+    }
+    
+    // 4. 버전 업데이트 체크
+    if (hasUpdates && localVersion !== latestVersion) {
+      console.log('📥 [useProjectSync] 새 버전 감지 - 백업 복원 시작');
+      
+      try {
+        const restoredData = await cloudRestore();
+        
+        if (restoredData) {
+          console.log('✅ [useProjectSync] 백업 복원 완료');
+          setProjectData(restoredData);
+          localStorage.setItem('project_version', latestVersion);
+          setCurrentVersion(latestVersion);
+        } else {
+          console.log('📝 [useProjectSync] 새 버전이지만 클라우드 데이터 없음 - 로컬 데이터 유지');
+        }
+      } catch (versionRestoreError) {
+        console.log('📝 [useProjectSync] 버전 업데이트 복원 실패 - 로컬 데이터 유지:', versionRestoreError);
+      }
+    }
+    
+  } catch (error) {
+    console.log('📝 [useProjectSync] 전체 동기화 프로세스 오류 - 로컬 데이터 유지:', error);
+  } finally {
+    if (showLoading) {
+      setIsSyncing(false);
+      console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제');
+    }
+  }
+}, [cloudRestore, cloudSave, pauseSync, getSavedOrInitialData]);
