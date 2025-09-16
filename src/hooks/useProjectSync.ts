@@ -31,9 +31,26 @@ export const useProjectSync = (
       const savedData = localStorage.getItem('crazyshot_project_data');
       if (savedData) {
         const parsedData = JSON.parse(savedData);
-        return parsedData;
+        // 데이터 구조 유효성 검사
+        if (parsedData && Array.isArray(parsedData.projectPhases)) {
+          return parsedData;
+        }
       }
-      return initialData;
+      
+      // 유효한 데이터 없을 경우 초기 데이터 생성
+      const defaultProjectData = {
+        projectPhases: [],
+        logs: [{
+          timestamp: new Date().toLocaleString('ko-KR'),
+          message: '초기 프로젝트 데이터 생성',
+          version: `v${Date.now()}-initial`
+        }]
+      };
+      
+      // 로컬 스토리지에 기본 데이터 저장
+      localStorage.setItem('crazyshot_project_data', JSON.stringify(defaultProjectData));
+      
+      return defaultProjectData;
     } catch (error) {
       console.error('❌ 로컬 데이터 로드 중 오류:', error);
       return initialData;
@@ -120,7 +137,24 @@ export const useProjectSync = (
       
       const { latestVersion, hasUpdates } = await response.json();
       const localVersion = localStorage.getItem('project_version');
+      const localData = localStorage.getItem('crazyshot_project_data');
       
+      // 로컬 데이터 없거나 유효하지 않은 경우 클라우드 복원 시도
+      if (!localData || !JSON.parse(localData).projectPhases || JSON.parse(localData).projectPhases.length === 0) {
+        console.log('📥 [useProjectSync] 로컬 데이터 없음 - 클라우드 복원 시도');
+        const restoredData = await cloudRestore();
+        
+        if (restoredData) {
+          console.log('✅ [useProjectSync] 클라우드 백업으로부터 데이터 복원');
+          setProjectData(restoredData);
+          localStorage.setItem('crazyshot_project_data', JSON.stringify(restoredData));
+          localStorage.setItem('project_version', latestVersion);
+          setCurrentVersion(latestVersion);
+          return;
+        }
+      }
+      
+      // 기존 버전 체크 로직
       if (hasUpdates && localVersion !== latestVersion) {
         console.log('📥 [useProjectSync] 새 버전 감지 - 백업 복원 시작');
         const restoredData = await cloudRestore();
