@@ -189,6 +189,7 @@ const App: React.FC = () => {
         if (hasMultipleUsers) {
           triggerSmartSync();
         }
+        // 클라우드 백업은 updateProjectData 내부에서 자동 실행됨
       }
     });
   }, [updateProjectData, notifyUserAction, confirmDataChange, hasMultipleUsers, triggerSmartSync]);
@@ -209,6 +210,7 @@ const App: React.FC = () => {
       if (hasMultipleUsers) {
         triggerSmartSync();
       }
+      // 클라우드 백업은 updateProjectData 내부에서 자동 실행됨
     });
   }, [updateProjectData, notifyUserAction, confirmDataChange, hasMultipleUsers, triggerSmartSync]);
 
@@ -244,6 +246,7 @@ const App: React.FC = () => {
       if (hasMultipleUsers) {
         triggerSmartSync();
       }
+      // 클라우드 백업은 updateProjectData 내부에서 자동 실행됨
     });
   }, [updateProjectData, hasMultipleUsers, triggerSmartSync]);
 
@@ -265,6 +268,7 @@ const App: React.FC = () => {
       if (hasMultipleUsers) {
         triggerSmartSync();
       }
+      // 클라우드 백업은 updateProjectData 내부에서 자동 실행됨
     });
   }, [updateProjectData, hasMultipleUsers, triggerSmartSync]);
 

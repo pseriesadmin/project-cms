@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ProjectData } from '../types';
 import { useRealtimeBackup } from './useRealtimeBackup';
 
@@ -176,7 +176,22 @@ export const useProjectSync = (
     }
   }, [cloudRestore, pauseSync]);
 
-  // 데이터 업데이트 및 자동 저장 (버전 관리 포함)
+  // 백업 디바운싱을 위한 타이머 관리
+  const backupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 디바운스된 클라우드 백업
+  const debouncedCloudSave = useCallback((data: ProjectData) => {
+    if (backupTimeoutRef.current) {
+      clearTimeout(backupTimeoutRef.current);
+    }
+    
+    backupTimeoutRef.current = setTimeout(() => {
+      cloudSave(data);
+      console.log('📁 [useProjectSync] 디바운스된 클라우드 백업 실행');
+    }, 2000); // 2초 디바운스
+  }, [cloudSave]);
+
+  // 데이터 업데이트 및 자동 저장 (버전 관리 포함, 트래픽 최적화)
   const updateProjectData = useCallback((updater: (draft: ProjectData) => void | ProjectData) => {
     setProjectData(currentState => {
       if (typeof updater === 'function') {
@@ -203,18 +218,19 @@ export const useProjectSync = (
         if (autoSave) {
           try {
             saveToLocal(updatedData);
-            // cloudSave(updatedData); // 클라우드 자동 저장 비활성화 (트래픽 최적화)
-            console.log('📁 [useProjectSync] 로컬 저장만 실행 (클라우드 자동 저장 비활성화)');
+            debouncedCloudSave(updatedData); // 디바운스된 클라우드 백업
+            console.log('📁 [useProjectSync] 로컬 저장 + 디바운스 클라우드 백업');
           } catch (error) {
-            console.error('로컬 저장 실패:', error);
+            console.error('저장 실패:', error);
           }
         } else {
-          // 자동 저장 비활성화 시에도 로컬 저장은 실행
+          // 자동 저장 비활성화 시에도 로컬 저장 및 디바운스 클라우드 백업
           try {
             saveToLocal(updatedData);
-            console.log('📁 [useProjectSync] 자동 저장 비활성화 - 로컬 저장만 실행');
+            debouncedCloudSave(updatedData); // 디바운스된 클라우드 백업
+            console.log('📁 [useProjectSync] 로컬 저장 + 디바운스 클라우드 백업 (자동 저장 비활성화)');
           } catch (error) {
-            console.error('로컬 저장 실패:', error);
+            console.error('저장 실패:', error);
           }
         }
         
@@ -222,7 +238,7 @@ export const useProjectSync = (
       }
       return currentState;
     });
-  }, [autoSave, saveToLocal, cloudSave, generateVersion]);
+  }, [autoSave, saveToLocal, debouncedCloudSave, generateVersion]);
 
   // 초기 로드 시 최신 버전 체크 및 복원 (로딩 표시 포함)
   useEffect(() => {
@@ -238,11 +254,19 @@ export const useProjectSync = (
       const versionCheckInterval = setInterval(checkAndAutoRestore, syncInterval);
       return () => {
         clearInterval(versionCheckInterval);
-        console.log('🛑 [useProjectSync] 자동 복원 동기화 타이머 정리');
+        // 백업 타이머도 정리
+        if (backupTimeoutRef.current) {
+          clearTimeout(backupTimeoutRef.current);
+        }
+        console.log('🛑 [useProjectSync] 자동 복원 동기화 및 백업 타이머 정리');
       };
     }
     
     return () => {
+      // 백업 타이머 정리
+      if (backupTimeoutRef.current) {
+        clearTimeout(backupTimeoutRef.current);
+      }
     };
   }, [autoRestore, syncInterval]);
 
