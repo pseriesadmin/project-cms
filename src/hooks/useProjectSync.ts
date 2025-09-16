@@ -159,7 +159,7 @@ export const useProjectSync = (
 
     // 최신 데이터 선택
     const newerData = localTimestamp >= cloudTimestamp ? localData : cloudData;
-    const olderData = localTimestamp < cloudTimestamp ? localData : cloudData;
+    // olderData 변수 제거
 
     // 스마트 병합: 최신 데이터 기반으로 누락된 항목 추가
     const mergedData = {
