@@ -314,19 +314,30 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
     }
   }, [backupState.isOnline, performBackup]);
 
-  // 복원 실행 (오류 처리 강화)
-  const restoreFromCloud = useCallback(async (): Promise<T | null> => {
+  // 복원 실행 (캐시 무시 및 오류 처리 강화)
+  const restoreFromCloud = useCallback(async (ignoreCacheOption = false): Promise<T | null> => {
     try {
       if (!backupState.isOnline) {
         console.warn('오프라인 상태에서는 클라우드 복원을 사용할 수 없습니다.');
         return null;
       }
 
+      // 캐시 무시 쿼리 파라미터 추가 (도메인 첫 진입 시 또는 요청 시)
+      const cacheParam = ignoreCacheOption ? `&nocache=${Date.now()}` : '';
       const apiEndpoint = dataType === 'project' 
-        ? `/api/project?userId=${userId}`
-        : `/api/backup`;
+        ? `/api/project?userId=${userId}${cacheParam}`
+        : `/api/backup${cacheParam ? `?nocache=${Date.now()}` : ''}`;
 
-      const response = await fetch(apiEndpoint);
+      console.log(`🔄 [restoreFromCloud] 클라우드 복원 시도 (캐시무시: ${ignoreCacheOption})`);
+
+      const response = await fetch(apiEndpoint, {
+        // 캐시 무시 헤더 추가 (최소한의 설정)
+        ...(ignoreCacheOption && {
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        })
+      });
       
       if (!response.ok) {
         // 404는 데이터 없음을 의미하므로 null 반환 (에러 없이)

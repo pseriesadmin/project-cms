@@ -194,15 +194,18 @@ export const useProjectSync = (
       const localData = localStorage.getItem('crazyshot_project_data');
       let parsedLocalData: ProjectData | null = null;
       
+      let localDataParseFailed = false;
+      
       try {
         parsedLocalData = localData ? JSON.parse(localData) : null;
       } catch (error) {
-        console.error('로컬 데이터 파싱 오류:', error);
+        console.error('🚨 [useProjectSync] 로컬 데이터 파싱 오류 - 클라우드 복원 우선 시도:', error);
         parsedLocalData = null;
+        localDataParseFailed = true; // 파싱 실패 플래그
       }
 
-      // 클라우드에서 데이터 복원 시도
-      const cloudData = await cloudRestore();
+      // 로컬 데이터 파싱 실패 또는 브라우저 캐시 초기화 대비: 클라우드 복원 우선 시도
+      const cloudData = await cloudRestore(localDataParseFailed || !localData);
       
       // 로컬과 클라우드 데이터 모두 존재하는 경우 안전한 병합
       if (parsedLocalData && cloudData) {

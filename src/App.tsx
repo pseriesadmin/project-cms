@@ -134,6 +134,28 @@ const App: React.FC = () => {
 
   const totalProgress = totalCheckpoints > 0 ? Math.round((completedCheckpoints / totalCheckpoints) * 100) : 0;
 
+  // 도메인 진입 시 최초 한 번 캐시 무시 클라우드 복원 시도
+  useEffect(() => {
+    let isInitialLoad = true;
+    
+    if (isInitialLoad) {
+      console.log('🌐 [App] 도메인 첫 진입 - 캐시 무시 클라우드 복원 시도');
+      
+      // 500ms 딜레이 후 캐시 무시 복원 시도 (초기 로딩 충돌 방지)
+      const timer = setTimeout(async () => {
+        try {
+          await cloudRestore(true); // 캐시 무시 복원
+          console.log('✅ [App] 도메인 첫 진입 클라우드 복원 완료');
+        } catch (error) {
+          console.warn('⚠️ [App] 도메인 첫 진입 클라우드 복원 실패:', error);
+        }
+      }, 500);
+      
+      isInitialLoad = false;
+      return () => clearTimeout(timer);
+    }
+  }, []); // 빈 의존성 배열 - 첫 렌더링에만 실행
+
   // 다중 사용자 감지 시 강화된 경고 표시 및 스마트 동기화
   useEffect(() => {
     console.log(`🚨 [App] 다중 사용자 알림 useEffect 실행:`, {
