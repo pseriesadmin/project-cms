@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 
-// 단순한 실시간 사용자 세션 관리
+// API 폴링 기반 실시간 사용자 세션 관리
 export const useUserSession = () => {
   const [sessionId] = useState(() => {
     // 기존 localStorage에서 사용자 ID 확인
@@ -23,141 +23,79 @@ export const useUserSession = () => {
     lastUpdate: Date; 
     users: string[]; 
   }>(() => {
-    // 브로드캐스트 채널을 통한 로컬 감지 초기화 (트래픽 최적화)
+    // API 폴링 기반 초기화 (트래픽 최적화)
     const initial = { 
-      count: 0, // 서버 상태와 일치하도록 0으로 시작
+      count: 1, // 자신을 포함하여 1로 시작
       lastUpdate: new Date(),
-      users: [] // 빈 배열로 시작
+      users: [sessionId] // 자신을 포함
     };
-    console.log(`👥 [useUserSession] 활성 사용자 초기값 (최적화):`, initial);
+    console.log(`👥 [useUserSession] 활성 사용자 초기값 (API 기반):`, initial);
     return initial;
   });
 
   const [recentActions, setRecentActions] = useState<string[]>([]);
-  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
-  const userHeartbeatsRef = useRef<Map<string, number>>(new Map());
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 브로드캐스트 채널 초기화 및 동시 사용자 감지
+  // API 기반 세션 관리 및 동시 사용자 감지 (트래픽 최적화)
   useEffect(() => {
-    if (typeof BroadcastChannel === 'undefined') {
-      console.log(`⚠️ [useUserSession] BroadcastChannel API 미지원`);
-      return;
-    }
-
-    const channel = new BroadcastChannel('crazyshot_user_session');
-    broadcastChannelRef.current = channel;
-
-    // 다른 탭/창에서 온 메시지 수신 (트래픽 최적화)
-    channel.onmessage = (event) => {
-      const { type, sessionId: otherSessionId, timestamp } = event.data;
-      console.log(`📢 [useUserSession] 브로드캐스트 메시지 수신:`, event.data);
-
-      if (otherSessionId === sessionId) return; // 자신의 메시지 무시
-      
-      if (type === 'USER_HEARTBEAT') {
-        // 다른 사용자의 하트비트 기록
-        userHeartbeatsRef.current.set(otherSessionId, timestamp);
-        
-        // 활성 사용자 목록 업데이트 (자신 포함)
-        setActiveUsers(prev => {
-          const existingUsers = new Set(prev.users);
-          existingUsers.add(sessionId); // 자신을 포함
-          if (!existingUsers.has(otherSessionId)) {
-            existingUsers.add(otherSessionId);
-            console.log(`👤 [useUserSession] 새 사용자 감지:`, otherSessionId);
-          }
-          
-          return {
-            count: existingUsers.size,
-            lastUpdate: new Date(),
-            users: Array.from(existingUsers)
-          };
+    // 세션 등록 및 하트비트 API 호출
+    const sendHeartbeat = async () => {
+      try {
+        const response = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            action: 'heartbeat',
+            timestamp: Date.now()
+          })
         });
-      } else if (type === 'USER_ACTION') {
-        // 다른 사용자의 활동 알림 수신
-        const { action } = event.data;
-        const actionMessage = `${otherSessionId}: ${action}`;
-        setRecentActions(prev => [actionMessage, ...prev.slice(0, 4)]);
-        console.log(`📢 [useUserSession] 다른 사용자 활동 감지:`, { otherSessionId, action });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`💓 [useUserSession] 하트비트 전송 성공:`, data);
+          
+          // 서버에서 받은 활성 세션 정보로 업데이트
+          setActiveUsers({
+            count: data.totalCount || 1,
+            lastUpdate: new Date(),
+            users: data.activeSessions?.map((s: any) => s.id) || [sessionId]
+          });
+        }
+      } catch (error) {
+        console.error(`❌ [useUserSession] 하트비트 전송 실패:`, error);
+        // 네트워크 오류 시 로컬 상태 유지
+        setActiveUsers(prev => ({
+          ...prev,
+          count: 1,
+          users: [sessionId]
+        }));
       }
     };
 
-    // 초기 하트비트 전송
-    const sendHeartbeat = () => {
-      const timestamp = Date.now();
-      channel.postMessage({
-        type: 'USER_HEARTBEAT',
-        sessionId,
-        timestamp
-      });
-      userHeartbeatsRef.current.set(sessionId, timestamp);
-      console.log(`💓 [useUserSession] 하트비트 전송:`, { sessionId, timestamp });
-    };
-
-    // 즉시 하트비트 전송 및 자신을 활성 사용자에 추가
+    // 즉시 하트비트 전송
     sendHeartbeat();
-    setActiveUsers(prev => ({
-      ...prev,
-      count: 1,
-      users: [sessionId]
-    }));
 
-    // 주기적 하트비트 전송 (10초마다로 단축 - 실시간성 향상)
-    const heartbeatInterval = setInterval(sendHeartbeat, 10000);
-
-    // 비활성 사용자 정리 (30초마다로 단축 - 실시간성 향상)
-    const cleanupInterval = setInterval(() => {
-      const now = Date.now();
-      const activeThreshold = 25000; // 25초로 단축
-      
-      setActiveUsers(prev => {
-        const activeUserList = prev.users.filter(userId => {
-          const lastHeartbeat = userHeartbeatsRef.current.get(userId);
-          const isActive = lastHeartbeat && (now - lastHeartbeat) < activeThreshold;
-          
-          if (!isActive && userId !== sessionId) {
-            console.log(`👤 [useUserSession] 비활성 사용자 제거:`, userId);
-            userHeartbeatsRef.current.delete(userId);
-          }
-          
-          return isActive || userId === sessionId; // 자신은 항상 유지
-        });
-        
-        return {
-          count: activeUserList.length,
-          lastUpdate: new Date(),
-          users: activeUserList
-        };
-      });
-    }, 30000);
+    // 주기적 하트비트 전송 (30초마다 - 트래픽 최적화)
+    pollingIntervalRef.current = setInterval(sendHeartbeat, 30000);
     
     return () => {
-      console.log(`🛑 [useUserSession] 브로드캐스트 채널 정리`);
-      clearInterval(heartbeatInterval);
-      clearInterval(cleanupInterval);
-      channel.close();
+      console.log(`🛑 [useUserSession] API 폴링 정리`);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
     };
   }, [sessionId]);
 
-  // 사용자 활동 알림 (트래픽 최적화 - 서버 호출 최소화)
+  // 사용자 활동 알림 (로컬만 처리 - 트래픽 최적화)
   const notifyUserAction = useCallback((action: string, userId?: string) => {
     const actionMessage = `${userId || sessionId}: ${action}`;
     setRecentActions(prev => [actionMessage, ...prev.slice(0, 4)]); // 최근 5개만 유지
     
-    // 브로드캐스트 채널을 통한 로컬 알림 (서버 API 대신 사용)
-    if (broadcastChannelRef.current) {
-      broadcastChannelRef.current.postMessage({
-        type: 'USER_ACTION',
-        sessionId: userId || sessionId,
-        action,
-        timestamp: Date.now()
-      });
-    }
-    
     console.log(`📢 [useUserSession] 사용자 활동 알림 (로컬):`, { action, sessionId: userId || sessionId });
   }, [sessionId]);
 
-  // hasMultipleUsers 상태 계산 (브로드캐스트 채널 기반)
+  // hasMultipleUsers 상태 계산 (API 기반)
   const hasMultipleUsers = activeUsers.count > 1;
   const isMultipleUsersRef = useRef(hasMultipleUsers);
   
