@@ -7,6 +7,7 @@ interface ProjectSyncOptions {
   syncInterval?: number;
   autoSave?: boolean;
   saveInterval?: number;
+  pauseSync?: boolean; // 트래픽 최적화: 비활성 상태에서 동기화 일시 중단
 }
 
 export const useProjectSync = (
@@ -16,7 +17,8 @@ export const useProjectSync = (
   const {
     autoSave = false, // 자동 저장 비활성화 (수동 백업 사용)
     autoRestore = true, // 자동 복원 동기화 활성화
-    syncInterval = 60000 // 60초마다 동기화 체크
+    syncInterval = 60000, // 60초마다 동기화 체크
+    pauseSync = false // 트래픽 최적화: 동기화 일시 중단 제어
     // saveInterval 제거 - 사용하지 않음
   } = options;
 
@@ -100,8 +102,14 @@ export const useProjectSync = (
     }
   }, [autoRestore, syncInterval]);
 
-  // 버전 체크 및 자동 복원 함수
-  const checkAndAutoRestore = useCallback(async (showLoading = false) => {
+  // 버전 체크 및 자동 복원 함수 (트래픽 최적화 적용)
+  const checkAndAutoRestore = useCallback(async (showLoading = false, forceSync = false) => {
+    // 트래픽 최적화: 동기화 일시 중단 상태에서는 강제 동기화가 아닌 경우 중단
+    if (pauseSync && !forceSync) {
+      console.log('🛑 [useProjectSync] 동기화 일시 중단 상태 - 트래픽 최적화');
+      return;
+    }
+    
     if (showLoading) {
       setIsSyncing(true);
       console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시');
@@ -132,7 +140,7 @@ export const useProjectSync = (
         console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제');
       }
     }
-  }, [cloudRestore]);
+  }, [cloudRestore, pauseSync]);
 
   // 데이터 업데이트 및 자동 저장 (버전 관리 포함)
   const updateProjectData = useCallback((updater: (draft: ProjectData) => void | ProjectData) => {
@@ -204,6 +212,12 @@ export const useProjectSync = (
     };
   }, [autoRestore, syncInterval]);
 
+  // 스마트 동기화: 필요 시점 감지하여 강제 동기화 실행
+  const triggerSmartSync = useCallback(() => {
+    console.log('🚀 [useProjectSync] 스마트 동기화 트리거 - 강제 실행');
+    checkAndAutoRestore(false, true); // forceSync = true로 즉시 동기화
+  }, [checkAndAutoRestore]);
+
   return {
     projectData,
     updateProjectData,
@@ -215,6 +229,7 @@ export const useProjectSync = (
     isSyncing,
     isOnline,
     backupState,
-    currentVersion
+    currentVersion,
+    triggerSmartSync // 스마트 동기화 트리거 함수 노출
   };
 };

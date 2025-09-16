@@ -12,6 +12,7 @@ import { ProductDashboard } from './components/ProductDashboard';
 import { useProjectSync } from './hooks/useProjectSync';
 import { TopSnackbar, BottomSnackbar } from './components/common/TopSnackbar';
 import { useUserSession } from './hooks/useRealtimeBackup';
+import { useActivityOptimizer } from './hooks/useActivityOptimizer';
 
 type TabId = 'workflow' | 'dashboard';
 
@@ -67,6 +68,12 @@ const App: React.FC = () => {
     hasMultipleUsers 
   } = useUserSession();
 
+  // 트래픽 최적화: 사용자 활동 감지
+  const { isActive } = useActivityOptimizer({
+    inactivityThreshold: 5 * 60 * 1000, // 5분 비활성
+    activeCheckInterval: 60000 // 1분마다 확인
+  });
+
   console.log(`🏠 [App] useUserSession 호출 결과:`, {
     activeUsers,
     hasMultipleUsers,
@@ -79,7 +86,7 @@ const App: React.FC = () => {
     activeUserCount: activeUsers.count 
   };
 
-  // 프로젝트 데이터 동기화
+  // 프로젝트 데이터 동기화 (트래픽 최적화 적용)
   const {
     projectData,
     isSyncing, // 초기 복원 로딩 상태 
@@ -89,8 +96,11 @@ const App: React.FC = () => {
     backupState,
     cloudBackup,
     cloudRestore,
-    currentVersion
-  } = useProjectSync(initialData);
+    currentVersion,
+    triggerSmartSync
+  } = useProjectSync(initialData, { 
+    pauseSync: !isActive // 비활성 상태에서 동기화 일시 중단
+  });
   
   // 자동 복원 동기화 상태 확인 (자동 백업은 비활성화)
   const isAutoSyncWorking = isOnline; // 자동 복원 동기화 활성화 상태
@@ -124,7 +134,7 @@ const App: React.FC = () => {
 
   const totalProgress = totalCheckpoints > 0 ? Math.round((completedCheckpoints / totalCheckpoints) * 100) : 0;
 
-  // 다중 사용자 감지 시 강화된 경고 표시
+  // 다중 사용자 감지 시 강화된 경고 표시 및 스마트 동기화
   useEffect(() => {
     console.log(`🚨 [App] 다중 사용자 알림 useEffect 실행:`, {
       hasMultipleUsers: status.hasMultipleUsers,
@@ -137,11 +147,13 @@ const App: React.FC = () => {
     if (status.hasMultipleUsers && !showUserSnackbar) {
       console.log(`📢 [App] 다중 사용자 감지! 경고 스낵바 표시 시작`);
       setShowUserSnackbar(true);
+      // 스마트 동기화: 다중 사용자 감지 시 즉시 동기화
+      triggerSmartSync();
     } else if (!status.hasMultipleUsers && showUserSnackbar) {
       console.log(`📢 [App] 단일 사용자 감지! 경고 스낵바 자동 해제`);
       setShowUserSnackbar(false);
     }
-  }, [status.hasMultipleUsers, showUserSnackbar]);
+  }, [status.hasMultipleUsers, showUserSnackbar, triggerSmartSync]);
 
   // 다중 사용자 환경에서 데이터 변경 시 추가 확인
   const confirmDataChange = useCallback((action: string) => {
@@ -173,9 +185,13 @@ const App: React.FC = () => {
         Object.assign(phase, updates);
         // 사용자 활동 알림
         notifyUserAction(`프로젝트 단계 '${phase.title}' 수정`);
+        // 스마트 동기화: 데이터 변경 시 다중 사용자 환경에서 동기화 트리거
+        if (hasMultipleUsers) {
+          triggerSmartSync();
+        }
       }
     });
-  }, [updateProjectData, notifyUserAction, confirmDataChange]);
+  }, [updateProjectData, notifyUserAction, confirmDataChange, hasMultipleUsers, triggerSmartSync]);
 
   const handleAddPhase = useCallback(() => {
     if (!confirmDataChange('새 워크플로우 추가')) return;
@@ -189,8 +205,12 @@ const App: React.FC = () => {
       draft.projectPhases.push(newPhase);
       // 사용자 활동 알림
       notifyUserAction('새 워크플로우 추가');
+      // 스마트 동기화: 데이터 변경 시 다중 사용자 환경에서 동기화 트리거
+      if (hasMultipleUsers) {
+        triggerSmartSync();
+      }
     });
-  }, [updateProjectData, notifyUserAction, confirmDataChange]);
+  }, [updateProjectData, notifyUserAction, confirmDataChange, hasMultipleUsers, triggerSmartSync]);
 
   const handleDeletePhase = useCallback((phaseId: string) => {
     setPhaseToDelete(phaseId);
@@ -220,8 +240,12 @@ const App: React.FC = () => {
       const task = phase.tasks.find((t: Task) => t.id === taskId);
       if (!task) return;
       Object.assign(task, updates);
+      // 스마트 동기화: 데이터 변경 시 다중 사용자 환경에서 동기화 트리거
+      if (hasMultipleUsers) {
+        triggerSmartSync();
+      }
     });
-  }, [updateProjectData]);
+  }, [updateProjectData, hasMultipleUsers, triggerSmartSync]);
 
   const handleAddTask = useCallback((phaseId: string) => {
     updateProjectData(draft => {
@@ -237,8 +261,12 @@ const App: React.FC = () => {
         issues: ''
       };
       phase.tasks.push(newTask);
+      // 스마트 동기화: 데이터 변경 시 다중 사용자 환경에서 동기화 트리거
+      if (hasMultipleUsers) {
+        triggerSmartSync();
+      }
     });
-  }, [updateProjectData]);
+  }, [updateProjectData, hasMultipleUsers, triggerSmartSync]);
 
   const handleDeleteTask = useCallback((phaseId: string, taskId: string) => {
     setTaskToDelete({ phaseId, taskId });
