@@ -40,9 +40,12 @@ export interface ProjectData {
 
 // 장비 현황 관련 타입 정의
 export interface Equipment {
+  // Supabase 호환 필드 (선택적)
+  id?: number; // Supabase Primary Key
+  // 기존 필드 유지
   registrationDate: string; // 등록일시 필드 추가
   categoryCode?: string; // 제품군 분류코드
-  code: string;
+  code: string; // UNIQUE 제약조건
   name: string;
   category: string;
   manufacturer: string;
@@ -55,6 +58,9 @@ export interface Equipment {
   components?: string;
   info?: string;
   imageUrl?: string;
+  // Supabase 메타데이터 (선택적)
+  createdAt?: string;
+  updatedAt?: string;
   [key: string]: any; // 동적 필드 지원
 }
 
