@@ -198,6 +198,36 @@ export const useEquipmentExport = () => {
     console.log(`✅ 로그 CSV 내보내기 완료: ${sortedLogs.length}개 항목`);
   }, []);
 
+  // 오래된 백업 파일 자동 삭제 로직
+  const cleanupOldBackupFiles = useCallback((maxBackupFiles = 5) => {
+    try {
+      // 로컬 스토리지에서 백업 파일 목록 가져오기
+      const backupFiles = JSON.parse(
+        localStorage.getItem('backupFileList') || '[]'
+      );
+
+      // 오래된 백업 파일 정렬 및 삭제
+      if (backupFiles.length > maxBackupFiles) {
+        const sortedFiles = backupFiles
+          .sort((a: any, b: any) => b.timestamp - a.timestamp)
+          .slice(0, maxBackupFiles);
+
+        // 오래된 파일 삭제
+        sortedFiles.forEach((file: any) => {
+          localStorage.removeItem(`backup_${file.id}`);
+        });
+
+        // 백업 파일 목록 업데이트
+        localStorage.setItem(
+          'backupFileList', 
+          JSON.stringify(sortedFiles)
+        );
+      }
+    } catch (error) {
+      console.error('백업 파일 정리 중 오류:', error);
+    }
+  }, []);
+
   // JSON 백업 (단일화된 백업 시스템)
   const backupToJSON = useCallback(async (
     equipmentData: Equipment[],
@@ -207,6 +237,7 @@ export const useEquipmentExport = () => {
     versionHistory: any[]
   ) => {
     // 모든 등록 정보를 단일화하여 백업
+    const backupId = `backup_${Date.now()}`;
     const allData = {
       equipmentData,                                                  // 장비목록
       logData,                                                       // 장비변경 로그 (현재)
@@ -219,19 +250,32 @@ export const useEquipmentExport = () => {
       backupVersion: '3.1.0'                                        // 백업 버전 추가
     };
     const json = JSON.stringify(allData, null, 2);
+    
+    // 백업 파일 목록 관리
+    const backupFiles = JSON.parse(
+      localStorage.getItem('backupFileList') || '[]'
+    );
+    
+    backupFiles.push({
+      id: backupId,
+      timestamp: Date.now()
+    });
+    
+    localStorage.setItem('backupFileList', JSON.stringify(backupFiles));
+    localStorage.setItem(backupId, json);
+    
+    // 오래된 백업 파일 정리
+    cleanupOldBackupFiles();
 
-    // 브라우저 File System Access API 지원 여부 확인
+    // 기존 백업 로직 유지
     if ('showDirectoryPicker' in window && window.isSecureContext) {
       try {
-        // 디렉토리 선택 대화상자 열기
         const dirHandle = await (window as any).showDirectoryPicker({ 
           mode: 'readwrite' 
         });
 
-        // 파일명 생성
         const fileName = `크레이지샷_백업_${new Date().toISOString().slice(0, 10)}.json`;
         
-        // 파일 생성 및 쓰기
         const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(json);
@@ -249,19 +293,16 @@ export const useEquipmentExport = () => {
         alert(`✅ 모든 데이터가 ${fileName}으로 성공적으로 백업되었습니다.\n\n포함된 데이터:\n- 장비목록: ${allData.equipmentData.length}개\n- 변경로그: ${allData.logData.length + allData.logArchive.flatMap(a => a.logs || []).length}개\n- 양식항목: ${allData.formFields.length}개\n- 분류코드: ${allData.categoryCodes.length}개\n- AI API키: ${allData.geminiApiKey ? '포함됨' : '미설정'}`);
         return dirHandle;
       } catch (error: any) {
-        // 사용자가 취소한 경우 (AbortError 또는 NotAllowedError)
         if (error.name === 'AbortError' || error.name === 'NotAllowedError') {
           console.log('사용자가 백업을 취소했습니다.');
-          return null; // 취소 시 아무것도 하지 않음
+          return null;
         }
         
-        // 실제 오류 발생 시에만 폴백 다운로드 실행
         console.log('디렉토리 선택 중 오류 발생, 기본 다운로드 실행:', error);
         fallbackDownload(json);
         return null;
       }
     } else {
-      // File System Access API 미지원 시 기본 다운로드
       fallbackDownload(json);
       return null;
     }

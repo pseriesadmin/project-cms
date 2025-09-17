@@ -1,8 +1,9 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Equipment, EquipmentLogEntry, FormField, VersionHistory } from '../../types';
 import { useEquipmentExport } from '../../hooks/useEquipmentExport';
 import { useActivityOptimizer } from '../../hooks/useActivityOptimizer';
 import { useUserSession } from '../../hooks/useRealtimeBackup';
+import { TopSnackbar } from '../common/TopSnackbar';
 
 interface EquipmentManagementProps {
   equipmentData: Equipment[];
@@ -54,12 +55,26 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     cloudRestore
   } = useEquipmentExport();
 
+  // 백업 스낵바 상태 추가
+  const [backupSnackbar, setBackupSnackbar] = useState({
+    isVisible: false,
+    message: '',
+    type: 'info' as 'info' | 'success' | 'warning'
+  });
+
   // 자동 백업 최적화 (30분 간격)
   useEffect(() => {
     const autoBackupInterval = setInterval(async () => {
       // 온라인 상태 및 사용자 활성 상태에서만 백업
       if (isOnline && isActive) {
         try {
+          // 백업 직전 스낵바 알림
+          setBackupSnackbar({
+            isVisible: true,
+            message: '장비 데이터 자동 백업을 준비 중입니다...',
+            type: 'info'
+          });
+
           // 동기화 전략 동적 조정
           const syncStrategy = hasMultipleUsers ? 'immediate' : 'debounce';
           
@@ -87,8 +102,32 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
 
           await cloudBackup(equipmentData, updatedLogData, logArchive, formFields, versionHistory);
           
+          // 백업 완료 스낵바 알림
+          setBackupSnackbar({
+            isVisible: true,
+            message: '장비 데이터 자동 백업이 완료되었습니다.',
+            type: 'success'
+          });
+
+          // 3초 후 스낵바 숨김
+          setTimeout(() => {
+            setBackupSnackbar(prev => ({ ...prev, isVisible: false }));
+          }, 3000);
+
           console.log(`✅ 자동 백업 완료 (전략: ${syncStrategy}, 활성상태: ${isActive})`);
         } catch (error) {
+          // 백업 실패 스낵바 알림
+          setBackupSnackbar({
+            isVisible: true,
+            message: '자동 백업 중 오류가 발생했습니다.',
+            type: 'warning'
+          });
+
+          // 3초 후 스낵바 숨김
+          setTimeout(() => {
+            setBackupSnackbar(prev => ({ ...prev, isVisible: false }));
+          }, 3000);
+
           console.error('자동 백업 실패:', error);
         }
       } else {
@@ -259,6 +298,14 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
 
   return (
     <section className="bg-white rounded-lg shadow-sm border border-stone-200 mb-4 p-4">
+      {/* 백업 스낵바 추가 */}
+      <TopSnackbar
+        isVisible={backupSnackbar.isVisible}
+        message={backupSnackbar.message}
+        type={backupSnackbar.type}
+        onClose={() => setBackupSnackbar(prev => ({ ...prev, isVisible: false }))}
+      />
+
       <h2 className="text-xl font-bold text-stone-800 mb-4">장비 관리</h2>
       
       <div className="flex flex-wrap items-center justify-start gap-2 mb-4">
