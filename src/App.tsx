@@ -205,11 +205,10 @@ const App: React.FC = () => {
         Object.assign(phase, updates);
         // 사용자 활동 알림
         notifyUserAction(`프로젝트 단계 '${phase.title}' 수정`);
-        // 사용자 활성 상태 기반 클라우드 백업
+        // 자동 클라우드 백업
         cloudBackup(draft, { 
           backupType: 'AUTO', 
-          backupSource: '워크플로우 수정',
-          isUserActive: isActive
+          backupSource: '워크플로우 수정'
         });
       }
     });
@@ -231,11 +230,10 @@ const App: React.FC = () => {
       draft.projectPhases.push(newPhase);
       // 사용자 활동 알림
       notifyUserAction('새 워크플로우 추가');
-        // 사용자 활성 상태 기반 클라우드 백업
+        // 자동 클라우드 백업
         cloudBackup(draft, { 
           backupType: 'AUTO', 
-          backupSource: '워크플로우 추가',
-          isUserActive: isActive
+          backupSource: '워크플로우 추가'
         });
     });
   }, [updateProjectData, notifyUserAction, confirmDataChange, isOnline, cloudBackup, isActive]);
@@ -272,11 +270,10 @@ const App: React.FC = () => {
       const task = phase.tasks.find((t: Task) => t.id === taskId);
       if (!task) return;
       Object.assign(task, updates);
-      // 사용자 활성 상태 기반 클라우드 백업
+      // 자동 클라우드 백업
       cloudBackup(draft, { 
         backupType: 'AUTO', 
-        backupSource: '작업 수정',
-        isUserActive: isActive
+        backupSource: '작업 수정'
       });
     });
   }, [updateProjectData, isOnline, cloudBackup, isActive]);
@@ -299,11 +296,10 @@ const App: React.FC = () => {
         issues: ''
       };
       phase.tasks.push(newTask);
-      // 사용자 활성 상태 기반 클라우드 백업
+      // 자동 클라우드 백업
       cloudBackup(draft, { 
         backupType: 'AUTO', 
-        backupSource: '작업 추가',
-        isUserActive: isActive
+        backupSource: '작업 추가'
       });
     });
   }, [updateProjectData, isOnline, cloudBackup, isActive]);
@@ -457,6 +453,7 @@ const App: React.FC = () => {
       return;
     }
     try {
+      console.log('🚀 [App] 클라우드 백업 시작');
       // 백업 로그 생성 (누적 보존)
       const backupLog = {
         timestamp: new Date().toLocaleString('ko-KR'),
@@ -482,9 +479,10 @@ const App: React.FC = () => {
       // 로컬 상태 업데이트
       updateProjectData(() => updatedProjectData);
       
+      console.log('✅ [App] 클라우드 백업 완료');
       alert('클라우드 백업이 완료되었습니다.');
     } catch (error) {
-      console.error('클라우드 백업 중 오류:', error);
+      console.error('❌ [App] 클라우드 백업 중 오류:', error);
       alert('클라우드 백업 중 오류가 발생했습니다.');
     }
   };
@@ -495,6 +493,7 @@ const App: React.FC = () => {
       return;
     }
     try {
+      console.log('🚀 [App] 클라우드 복원 시작');
       const restoredData = await cloudRestore();
       if (restoredData) {
         // 모든 로그 누적 보존 (기존 + 복원 + 복원 로그)
@@ -515,9 +514,14 @@ const App: React.FC = () => {
           Object.assign(draft, restoredDataWithLog);
         });
 
+        console.log('✅ [App] 클라우드 복원 완료');
         alert('클라우드 백업에서 데이터를 성공적으로 복원했습니다.');
+      } else {
+        console.log('📭 [App] 클라우드에 복원할 데이터 없음');
+        alert('클라우드에 저장된 백업 데이터가 없습니다.');
       }
     } catch (error) {
+      console.error('❌ [App] 클라우드 복원 중 오류:', error);
       alert('클라우드 백업에서 데이터를 복원할 수 없습니다.');
     }
   };

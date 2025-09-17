@@ -121,6 +121,7 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
       return;
     }
     try {
+      console.log('🚀 [EquipmentManagement] 클라우드 백업 시작');
       // 동기화 전략 동적 조정
       const syncStrategy = hasMultipleUsers ? 'immediate' : 'debounce';
       
@@ -154,9 +155,10 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
       // 로컬 로그 상태 업데이트
       logDetailedChange('클라우드 백업', 'N/A', null, null);
       
+      console.log('✅ [EquipmentManagement] 클라우드 백업 완료');
       alert(`클라우드 백업이 완료되었습니다.\n동기화 전략: ${syncStrategy}\n사용자 활성 상태: ${isActive ? '활성' : '비활성'}`);
     } catch (error) {
-      console.error('클라우드 백업 중 오류:', error);
+      console.error('❌ [EquipmentManagement] 클라우드 백업 중 오류:', error);
       alert('클라우드 백업 중 오류가 발생했습니다.');
     }
   };
@@ -214,6 +216,7 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     
     if (confirm('클라우드에서 데이터를 복원하시겠습니까? 현재 데이터가 덮어쓰여집니다.')) {
       try {
+        console.log('🚀 [EquipmentManagement] 클라우드 복원 시작');
         const restoredData = await cloudRestore();
         
         if (restoredData) {
@@ -239,11 +242,16 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
           saveFormFields(restoredDataWithLog.formFields);
           logDetailedChange('클라우드 복원', 'N/A', null, null);
           
+          console.log('✅ [EquipmentManagement] 클라우드 복원 완료');
           alert('클라우드 백업에서 데이터를 성공적으로 복원했습니다.');
           // 상태 동기화를 위한 storage 이벤트 트리거
           window.dispatchEvent(new Event('storage'));
+        } else {
+          console.log('📭 [EquipmentManagement] 클라우드에 복원할 데이터 없음');
+          alert('클라우드에 저장된 백업 데이터가 없습니다.');
         }
       } catch (error) {
+        console.error('❌ [EquipmentManagement] 클라우드 복원 중 오류:', error);
         alert(error instanceof Error ? error.message : '클라우드 복원에 실패했습니다.');
       }
     }

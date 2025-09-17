@@ -251,29 +251,21 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
     [performBackup, shouldPerformBackup]
   );
 
-  // 기존 백업 실행 함수 수정 (사용자 활동 상태 기반)
+  // 클라우드 저장 함수 (단순화)
   const saveToCloud = useCallback(async (data: T, options: { 
     backupType?: 'AUTO' | 'MANUAL', 
-    backupSource?: string,
-    isUserActive?: boolean
+    backupSource?: string
   } = {}) => {
     const { 
       backupType = 'AUTO', 
-      backupSource = '자동 백업',
-      isUserActive = true
+      backupSource = '자동 백업'
     } = options;
 
-    // 사용자 비활성 상태에서는 동기화 완전 중단
-    if (!isUserActive && backupType === 'AUTO') {
-      console.log('🛑 [useRealtimeBackup] 사용자 비활성 상태 - 자동 백업 중단');
-      return;
-    }
-
-    // 온라인 상태에서만 디바운스 백업 트리거
+    // 온라인 상태에서만 백업 실행
     if (backupState.isOnline) {
       debouncedBackup(data, { backupType, backupSource });
     } else {
-      // 오프라인 시 최대 4개 대기열 유지
+      // 오프라인 시 대기열에 추가
       setBackupState(prev => ({
         ...prev,
         pendingBackups: [...prev.pendingBackups.slice(-4), { 
@@ -377,16 +369,29 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
     }
   }, [dataType, userId, backupState.isOnline]);
 
-  // 자동 백업 설정 (트래픽 최적화 - 완전 비활성화)
-  const startAutoBackup = useCallback((_getData: () => T) => {
-    console.log('🛑 [useRealtimeBackup] 자동 백업 완전 비활성화 - 트래픽 급증 방지');
+  // 자동 백업 설정 (트래픽 최적화)
+  const startAutoBackup = useCallback((getData: () => T) => {
+    console.log('🔄 [useRealtimeBackup] 자동 백업 설정');
     
-    // 자동 백업 타이머 설정하지 않음
+    const intervalId = setInterval(() => {
+      if (backupState.isOnline) {
+        try {
+          const data = getData();
+          if (data) {
+            saveToCloud(data, { backupType: 'AUTO' });
+            console.log('✅ [useRealtimeBackup] 자동 백업 완료');
+          }
+        } catch (error) {
+          console.error('❌ [useRealtimeBackup] 자동 백업 실패:', error);
+        }
+      }
+    }, 600000); // 10분마다 실행
+    
     return () => {
-      // 정리 함수만 제공
-      console.log('🛑 [useRealtimeBackup] 자동 백업 정리 (실제로는 타이머 없음)');
+      clearInterval(intervalId);
+      console.log('🛑 [useRealtimeBackup] 자동 백업 정리');
     };
-  }, []);
+  }, [saveToCloud, backupState.isOnline]);
 
   return {
     saveToCloud,

@@ -245,7 +245,7 @@ export const useProjectSync = (
             
             await cloudSave(mergedData, { 
               backupType: 'AUTO', 
-              backupSource: '자동 동기화 - 병합' 
+              backupSource: '자동 동기화 - 병합'
             });
             
             setLastSyncTime(new Date());
@@ -267,7 +267,7 @@ export const useProjectSync = (
           
           await cloudSave(parsedLocalData, { 
             backupType: 'AUTO', 
-            backupSource: '로컬 데이터 백업' 
+            backupSource: '로컬 데이터 백업'
           });
           
           setLastSyncTime(new Date());
@@ -291,7 +291,7 @@ export const useProjectSync = (
           // 기본 데이터를 클라우드에 백업
           await cloudSave(defaultData, { 
             backupType: 'AUTO', 
-            backupSource: '초기 데이터 생성' 
+            backupSource: '초기 데이터 생성'
           });
           
           setLastSyncTime(new Date());
@@ -353,7 +353,7 @@ export const useProjectSync = (
                 
                await cloudSave(mergedData, { 
                  backupType: 'AUTO', 
-                 backupSource: '주기적 동기화 - 병합' 
+                 backupSource: '주기적 동기화 - 병합'
                });
                 
                 setLastSyncTime(new Date());
@@ -373,7 +373,7 @@ export const useProjectSync = (
               console.log('🔄 [useProjectSync] 클라우드 데이터 손실 감지 - 로컬 백업');
               await cloudSave(parsedLocalData, { 
                 backupType: 'AUTO', 
-                backupSource: '주기적 로컬 백업' 
+                backupSource: '주기적 로컬 백업'
               });
               setLastSyncTime(new Date());
               console.log('✅ [useProjectSync] 주기적 로컬 백업 완료');
