@@ -729,15 +729,20 @@ const App: React.FC = () => {
                                      </button>
                                    </>
                                  )}
-                                 <div className="text-xs text-gray-500">
+                                 <div className="text-xs text-gray-500 ml-2">
                                    {(() => {
                                      const latestLog = projectData.logs[projectData.logs.length - 1];
                                      const displayVersion = latestLog?.version || currentVersion;
-                                     return displayVersion && (
-                                       <span>현재 버전: {displayVersion.slice(-8)}</span>
-                                     );
+                                     return displayVersion ? (
+                                       <span title={displayVersion}>
+                                         버전: {displayVersion.slice(-8)}
+                                       </span>
+                                     ) : null;
                                    })()}
                                  </div>
+                                 <button onClick={downloadAsCSV} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-crazy-blue rounded-lg shadow-md hover:bg-crazy-bright-blue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-bright-blue transition-colors">
+                                    <DownloadIcon className="w-4 h-4" /> 엑셀 내보내기
+                                </button>
                                  <button onClick={handleBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
                                      <SaveIcon className="w-4 h-4" /> 파일 백업
                                  </button>
@@ -745,9 +750,6 @@ const App: React.FC = () => {
                                  <button onClick={handleRestoreClick} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
                                      <UploadIcon className="w-4 h-4" /> 파일 복원
                                  </button>
-                                <button onClick={downloadAsCSV} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-crazy-blue rounded-lg shadow-md hover:bg-crazy-bright-blue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-bright-blue transition-colors">
-                                    <DownloadIcon className="w-4 h-4" /> 엑셀 내보내기
-                                </button>
                                 {isSyncing ? (
                                     <span className="ml-2 text-xs text-blue-600">🔄 데이터 복원 중...</span>
                                 ) : isAutoSyncWorking && (
