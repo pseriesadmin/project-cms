@@ -18,7 +18,7 @@ export const TopSnackbar: React.FC<TopSnackbarProps> = ({
   const getTypeStyles = () => {
     switch (type) {
       case 'warning':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-[#FFE5E5] text-[#CF0000] border-[#FFB6B6]';
       case 'success':
         return 'bg-green-50 text-green-700 border-green-200';
       default:
@@ -27,9 +27,17 @@ export const TopSnackbar: React.FC<TopSnackbarProps> = ({
   };
 
   return (
-    <div className={`fixed top-0 left-0 right-0 z-[9999] bg-[#FFE5E5] text-[#CF0000] border-b border-[#FFB6B6] py-2 transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}>
-      <div className="container mx-auto px-4 flex items-center justify-center">
-        <span className="text-xs font-medium text-center">{message}</span>
+    <div className={`fixed top-0 left-0 right-0 z-[9999] ${getTypeStyles()} border-b py-2 transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+      <div className="container mx-auto px-4 flex items-center justify-between">
+        <span className="text-xs font-medium text-center flex-grow">{message}</span>
+        {onClose && (
+          <button 
+            onClick={onClose} 
+            className="text-[#CF0000] hover:opacity-70 text-lg leading-none ml-2"
+          >
+            ×
+          </button>
+        )}
       </div>
     </div>
   );
