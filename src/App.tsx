@@ -74,28 +74,7 @@ const App: React.FC = () => {
     activeCheckInterval: 60000 // 1분마다 확인
   });
 
-  // 로깅 빈도 제한 (트래픽 최적화) - 30초마다만 로깅
-  const shouldLog = React.useMemo(() => {
-    const now = Date.now();
-    const lastLogTime = localStorage.getItem('lastUserSessionLogTime');
-    const timeSinceLastLog = lastLogTime ? now - parseInt(lastLogTime) : Infinity;
-    
-    if (timeSinceLastLog > 30000) { // 30초마다만 로깅
-      localStorage.setItem('lastUserSessionLogTime', now.toString());
-      return true;
-    }
-    return false;
-  }, [activeUsers.count, hasMultipleUsers]);
-
-  if (shouldLog && process.env.NODE_ENV === 'development') {
-    console.log(`🏠 [App] useUserSession 호출 결과 (30초 제한):`, {
-      activeUsers,
-      hasMultipleUsers,
-      recentActionsCount: recentActions.length,
-      현재시간: new Date().toISOString()
-    });
-  }
-
+  // 사용자 세션 상태 기본 관리
   const status = { 
     hasMultipleUsers, 
     activeUserCount: activeUsers.count 
@@ -183,46 +162,13 @@ const App: React.FC = () => {
     }
   }, []); // 빈 의존성 배열 - 첫 렌더링에만 실행
 
-  // 다중 사용자 감지 시 강화된 경고 표시 및 스마트 동기화
+  // 다중 사용자 감지 시 스낵바 표시 및 동기화 전략
   useEffect(() => {
-    // 로깅 빈도 제한 (트래픽 최적화) - 1분마다만 로깅
-    const shouldLogMultiUser = (() => {
-      const now = Date.now();
-      const lastLogTime = localStorage.getItem('lastMultiUserLogTime');
-      const timeSinceLastLog = lastLogTime ? now - parseInt(lastLogTime) : Infinity;
-      
-      if (timeSinceLastLog > 60000) { // 1분마다만 로깅
-        localStorage.setItem('lastMultiUserLogTime', now.toString());
-        return true;
-      }
-      return false;
-    })();
-
-    if (shouldLogMultiUser && process.env.NODE_ENV === 'development') {
-      console.log(`🚨 [App] 다중 사용자 알림 useEffect 실행 (1분 제한):`, {
-        hasMultipleUsers: status.hasMultipleUsers,
-        activeUserCount: status.activeUserCount,
-        showUserSnackbar,
-        조건충족: status.hasMultipleUsers && !showUserSnackbar,
-        시간: new Date().toISOString()
-      });
-    }
-    
     if (status.hasMultipleUsers && !showUserSnackbar) {
-      console.log(`📢 [App] 다중 사용자 감지! 경고 스낵바 표시 시작`);
       setShowUserSnackbar(true);
-      
-      // 다중 사용자 환경에서 즉시 동기화 전략 적용됨
-      console.log('⚡ [App] 다중 사용자 환경 - 즉시 동기화 전략 적용');
-      
-      // 스마트 동기화: 다중 사용자 감지 시 즉시 동기화
       triggerSmartSync();
     } else if (!status.hasMultipleUsers && showUserSnackbar) {
-      console.log(`📢 [App] 단일 사용자 감지! 경고 스낵바 자동 해제`);
       setShowUserSnackbar(false);
-      
-      // 단일 사용자 환경에서 디바운스 전략 적용됨
-      console.log('🔄 [App] 단일 사용자 환경 - 디바운스 전략 적용');
     }
   }, [status.hasMultipleUsers, showUserSnackbar, triggerSmartSync]);
 
@@ -230,9 +176,8 @@ const App: React.FC = () => {
   const confirmDataChange = useCallback((action: string) => {
     if (status.hasMultipleUsers) {
       return window.confirm(
-        `⚠️ 현재 ${status.activeUserCount}명이 동시 접속 중입니다.\n` +
-        `'${action}' 작업을 계속하시겠습니까?\n\n` +
-        `다른 사용자의 작업과 충돌할 수 있습니다.`
+        `현재 ${status.activeUserCount}명이 동시 접속 중입니다.\n` +
+        `'${action}' 작업을 계속하시겠습니까?`
       );
     }
     return true;
@@ -707,56 +652,16 @@ const App: React.FC = () => {
     alert('복원 작업이 취소되었습니다.');
   }, []);
 
-  // 개발용: 로컬 스토리지 초기화 함수
-  const clearLocalStorage = useCallback(() => {
-    if (window.confirm('⚠️ 로컬 스토리지의 모든 데이터를 삭제하고 초기 상태로 리셋하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.')) {
-      try {
-        // 삭제 전 현재 상태 로깅
-        console.log('🔍 삭제 전 로컬 스토리지 상태:', {
-          crazyshot_project_data: localStorage.getItem('crazyshot_project_data'),
-          project_version: localStorage.getItem('project_version'),
-          activeTab: localStorage.getItem('activeTab')
-        });
-        
-        localStorage.removeItem('crazyshot_project_data');
-        localStorage.removeItem('project_version');
-        localStorage.removeItem('activeTab');
-        console.log('🗑️ 로컬 스토리지 초기화 완료');
-        alert('✅ 로컬 스토리지가 초기화되었습니다. 페이지를 새로고침하세요.');
-        window.location.reload();
-      } catch (error) {
-        console.error('❌ 로컬 스토리지 초기화 실패:', error);
-        alert('❌ 로컬 스토리지 초기화에 실패했습니다.');
-      }
-    }
-  }, []);
+  // 개발용 로컬 스토리지 초기화 함수 제거됨
 
-  // 개발용: 현재 상태 확인 함수 (향상된 동기화 정보 포함)
-  const checkCurrentState = useCallback(() => {
-    console.log('📊 현재 프로젝트 상태:', {
-      projectPhases: projectData.projectPhases,
-      phasesCount: projectData.projectPhases.length,
-      logs: projectData.logs,
-      syncInfo: {
-        isActive: isActive,
-        hasMultipleUsers: status.hasMultipleUsers,
-        activeUserCount: status.activeUserCount,
-        isOnline: isOnline,
-        lastSyncTime: lastSyncTime
-      },
-      localStorage: {
-        crazyshot_project_data: localStorage.getItem('crazyshot_project_data'),
-        project_version: localStorage.getItem('project_version')
-      }
-    });
-  }, [projectData, isActive, status.hasMultipleUsers, status.activeUserCount, isOnline, lastSyncTime]);
+  // 개발용 상태 확인 함수 제거됨
 
   return (
     <>
       {/* 다중 사용자 강화된 경고 스낵바 */}
       <TopSnackbar
         isVisible={showUserSnackbar}
-        message={`🚨 위험: ${status.activeUserCount}명 동시 접속! 데이터 변경 시 충돌 위험이 높습니다. 작업 전 다른 사용자와 협의하세요.`}
+        message={`${status.activeUserCount}명 동시 사용자 확인`}
         type="warning"
         onClose={() => setShowUserSnackbar(false)}
       />
@@ -828,7 +733,6 @@ const App: React.FC = () => {
                                        <span>현재 버전: {displayVersion.slice(-8)}</span>
                                      );
                                    })()}
-                                   {/* 데이터 복원 알림 제거 */}
                                  </div>
                                  <button onClick={handleBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
                                      <SaveIcon className="w-4 h-4" /> 파일 백업
@@ -844,17 +748,6 @@ const App: React.FC = () => {
                                     <span className="ml-2 text-xs text-blue-600">🔄 데이터 복원 중...</span>
                                 ) : isAutoSyncWorking && (
                                     <span className="ml-2 text-xs text-green-600">✓ 자동 복원 동기화 활성</span>
-                                )}
-                                {/* 개발 환경에서만 표시되는 버튼들 */}
-                                {process.env.NODE_ENV === 'development' && (
-                                  <>
-                                    <button onClick={checkCurrentState} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-blue-600 bg-white border border-blue-600 rounded-lg shadow-md hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 transition-colors">
-                                        📊 상태 확인
-                                    </button>
-                                    <button onClick={clearLocalStorage} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 bg-white border border-red-600 rounded-lg shadow-md hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600 transition-colors">
-                                        🗑️ 로컬 데이터 초기화
-                                    </button>
-                                  </>
                                 )}
                             </div>
                         </div>

@@ -1,20 +1,18 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 
-// API 폴링 기반 실시간 사용자 세션 관리
+// 하이브리드 방식 실시간 사용자 세션 관리 (트래픽 최적화)
 export const useUserSession = () => {
   const [sessionId] = useState(() => {
     // 기존 localStorage에서 사용자 ID 확인
     const storedSessionId = localStorage.getItem('crazyshot_session_id');
     
     if (storedSessionId) {
-      console.log(`🆔 [useUserSession] 기존 세션 ID 로드:`, storedSessionId);
       return storedSessionId;
     }
     
     // 새로운 세션 ID 생성 및 저장
     const newSessionId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     localStorage.setItem('crazyshot_session_id', newSessionId);
-    console.log(`🆔 [useUserSession] 새 세션 ID 생성 및 저장:`, newSessionId);
     return newSessionId;
   });
 
@@ -23,13 +21,11 @@ export const useUserSession = () => {
     lastUpdate: Date; 
     users: string[]; 
   }>(() => {
-    // API 폴링 기반 초기화 (트래픽 최적화)
     const initial = { 
-      count: 1, // 자신을 포함하여 1로 시작
+      count: 1,
       lastUpdate: new Date(),
-      users: [sessionId] // 자신을 포함
+      users: [sessionId]
     };
-    console.log(`👥 [useUserSession] 활성 사용자 초기값 (API 기반):`, initial);
     return initial;
   });
 
@@ -53,7 +49,6 @@ export const useUserSession = () => {
 
         if (response.ok) {
           const data = await response.json();
-          console.log(`💓 [useUserSession] 하트비트 전송 성공:`, data);
           
           // 서버에서 받은 활성 세션 정보로 업데이트
           setActiveUsers({
@@ -63,7 +58,6 @@ export const useUserSession = () => {
           });
         }
       } catch (error) {
-        console.error(`❌ [useUserSession] 하트비트 전송 실패:`, error);
         // 네트워크 오류 시 로컬 상태 유지
         setActiveUsers(prev => ({
           ...prev,
@@ -80,7 +74,6 @@ export const useUserSession = () => {
     pollingIntervalRef.current = setInterval(sendHeartbeat, 30000);
     
     return () => {
-      console.log(`🛑 [useUserSession] API 폴링 정리`);
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
       }
@@ -91,24 +84,15 @@ export const useUserSession = () => {
   const notifyUserAction = useCallback((action: string, userId?: string) => {
     const actionMessage = `${userId || sessionId}: ${action}`;
     setRecentActions(prev => [actionMessage, ...prev.slice(0, 4)]); // 최근 5개만 유지
-    
-    console.log(`📢 [useUserSession] 사용자 활동 알림 (로컬):`, { action, sessionId: userId || sessionId });
   }, [sessionId]);
 
   // hasMultipleUsers 상태 계산 (API 기반)
   const hasMultipleUsers = activeUsers.count > 1;
   const isMultipleUsersRef = useRef(hasMultipleUsers);
   
-  // 다중 사용자 상태 변화 감지
+  // 다중 사용자 상태 변화 감지 (트래픽 최적화)
   useEffect(() => {
     if (isMultipleUsersRef.current !== hasMultipleUsers) {
-      console.log(`🔄 [useUserSession] 다중 사용자 상태 변화:`, {
-        이전: isMultipleUsersRef.current,
-        현재: hasMultipleUsers,
-        사용자수: activeUsers.count,
-        사용자목록: activeUsers.users,
-        시간: new Date().toISOString()
-      });
       isMultipleUsersRef.current = hasMultipleUsers;
     }
   }, [hasMultipleUsers, activeUsers.count, activeUsers.users]);
