@@ -1,6 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Equipment, EquipmentLogEntry, FormField, VersionHistory } from '../../types';
 import { useEquipmentExport } from '../../hooks/useEquipmentExport';
+import { useActivityOptimizer } from '../../hooks/useActivityOptimizer';
+import { useUserSession } from '../../hooks/useRealtimeBackup';
 
 interface EquipmentManagementProps {
   equipmentData: Equipment[];
@@ -34,6 +36,15 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   const importFileRef = useRef<HTMLInputElement>(null);
   const restoreFileRef = useRef<HTMLInputElement>(null);
 
+  // 사용자 활성 상태 감지
+  const { isActive } = useActivityOptimizer({
+    inactivityThreshold: 5 * 60 * 1000, // 5분 비활성
+    activeCheckInterval: 60000 // 1분마다 확인
+  });
+
+  // 실시간 사용자 세션 관리 (다중 사용자 감지)
+  const { hasMultipleUsers } = useUserSession();
+
   const {
     exportToCSV,
     backupToJSON,
@@ -42,6 +53,54 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     cloudBackup,
     cloudRestore
   } = useEquipmentExport();
+
+  // 자동 백업 최적화 (30분 간격)
+  useEffect(() => {
+    const autoBackupInterval = setInterval(async () => {
+      // 온라인 상태 및 사용자 활성 상태에서만 백업
+      if (isOnline && isActive) {
+        try {
+          // 동기화 전략 동적 조정
+          const syncStrategy = hasMultipleUsers ? 'immediate' : 'debounce';
+          
+          // 자동 백업 로그 생성
+          const backupLog = {
+            timestamp: new Date().toLocaleString('ko-KR'),
+            message: '장비 데이터 자동 백업 실행',
+            version: `auto-backup-${Date.now()}`,
+            syncStrategy,
+            isUserActive: isActive
+          };
+
+          const updatedLogData = [
+            ...logData,
+            {
+              id: Date.now() + Math.random() + '',
+              timestamp: new Date().toISOString(),
+              action: '자동 클라우드 백업',
+              itemCode: 'AUTO',
+              itemName: '장비 데이터 전체',
+              userId: 'system',
+              summary: backupLog.message
+            }
+          ];
+
+          await cloudBackup(equipmentData, updatedLogData, logArchive, formFields, versionHistory);
+          
+          console.log(`✅ 자동 백업 완료 (전략: ${syncStrategy}, 활성상태: ${isActive})`);
+        } catch (error) {
+          console.error('자동 백업 실패:', error);
+        }
+      } else {
+        console.log('🚫 자동 백업 조건 미충족:', { 
+          온라인: isOnline, 
+          활성상태: isActive 
+        });
+      }
+    }, 30 * 60 * 1000); // 30분마다 자동 백업
+
+    return () => clearInterval(autoBackupInterval);
+  }, [isOnline, isActive, hasMultipleUsers, equipmentData, logData, logArchive, formFields, versionHistory, cloudBackup]);
 
   const handleExportCSV = () => {
     exportToCSV(equipmentData, formFields);
@@ -62,11 +121,18 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
       return;
     }
     try {
-      // 백업 로그 생성 (누적 보존)
+      // 동기화 전략 동적 조정
+      const syncStrategy = hasMultipleUsers ? 'immediate' : 'debounce';
+      
+      // 백업 로그 생성 (누적 보존) - 사용자 활성 상태 메타데이터 포함
       const backupLog = {
         timestamp: new Date().toLocaleString('ko-KR'),
         message: '장비 데이터 클라우드 백업 실행',
-        version: `backup-${Date.now()}`
+        version: `backup-${Date.now()}`,
+        syncStrategy,
+        isUserActive: isActive,
+        backupType: 'MANUAL',
+        backupSource: '클라우드 백업 버튼'
       };
 
       // 기존 로그와 새 로그를 모두 보존하는 누적 데이터 생성
@@ -79,7 +145,7 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
           itemCode: 'N/A',
           itemName: '장비 데이터 전체',
           userId: 'system',
-          summary: backupLog.message
+          summary: `${backupLog.message} (전략: ${syncStrategy}, 활성: ${isActive})`
         }
       ];
 
@@ -88,7 +154,7 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
       // 로컬 로그 상태 업데이트
       logDetailedChange('클라우드 백업', 'N/A', null, null);
       
-      alert('클라우드 백업이 완료되었습니다.');
+      alert(`클라우드 백업이 완료되었습니다.\n동기화 전략: ${syncStrategy}\n사용자 활성 상태: ${isActive ? '활성' : '비활성'}`);
     } catch (error) {
       console.error('클라우드 백업 중 오류:', error);
       alert('클라우드 백업 중 오류가 발생했습니다.');
