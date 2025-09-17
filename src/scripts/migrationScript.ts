@@ -9,8 +9,7 @@
 
 import SupabaseMigrationHelper, { 
   equipmentArrayToSupabase, 
-  supabaseToEquipmentArray,
-  validateEquipmentForSupabase 
+  supabaseToEquipmentArray
 } from '../utils/supabaseMigration';
 import type { Equipment } from '../types';
 
@@ -167,11 +166,19 @@ export class MigrationScript {
   }
 
   /**
+   * 데이터 유효성 검증 메서드 추가
+   * 미래 마이그레이션 작업을 위한 유틸리티 함수
+   */
+  static validateEquipment(equipment: Equipment[]): boolean {
+    return SupabaseMigrationHelper.validateConvertedData(equipment);
+  }
+
+  /**
    * 전체 마이그레이션 프로세스 실행
    */
   static async runMigration(): Promise<void> {
     console.log('🎯 크레이지샷 장비 관리 시스템 Supabase 마이그레이션 시작');
-    console.log('=' .repeat(60));
+    console.log('='.repeat(60));
     
     try {
       const success = await this.simulateMigration();
