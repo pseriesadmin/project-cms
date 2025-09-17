@@ -57,11 +57,41 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   };
 
   const handleCloudBackup = async () => {
+    if (!isOnline) {
+      alert('🚨 클라우드 백업을 위해서는 인터넷 연결이 필요합니다.');
+      return;
+    }
     try {
-      await cloudBackup(equipmentData, logData, logArchive, formFields, versionHistory);
+      // 백업 로그 생성 (누적 보존)
+      const backupLog = {
+        timestamp: new Date().toLocaleString('ko-KR'),
+        message: '장비 데이터 클라우드 백업 실행',
+        version: `backup-${Date.now()}`
+      };
+
+      // 기존 로그와 새 로그를 모두 보존하는 누적 데이터 생성
+      const updatedLogData = [
+        ...logData,
+        {
+          id: Date.now() + Math.random() + '',
+          timestamp: new Date().toISOString(),
+          action: '클라우드 백업',
+          itemCode: 'N/A',
+          itemName: '장비 데이터 전체',
+          userId: 'system',
+          summary: backupLog.message
+        }
+      ];
+
+      await cloudBackup(equipmentData, updatedLogData, logArchive, formFields, versionHistory);
+      
+      // 로컬 로그 상태 업데이트
+      logDetailedChange('클라우드 백업', 'N/A', null, null);
+      
+      alert('클라우드 백업이 완료되었습니다.');
     } catch (error) {
-      console.error('클라우드 백업 실패:', error);
-      // 에러는 cloudBackup 함수에서 이미 처리됨
+      console.error('클라우드 백업 중 오류:', error);
+      alert('클라우드 백업 중 오류가 발생했습니다.');
     }
   };
 
@@ -111,17 +141,42 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   };
 
   const handleCloudRestore = async () => {
+    if (!isOnline) {
+      alert('🚨 클라우드 복원을 위해서는 인터넷 연결이 필요합니다.');
+      return;
+    }
+    
     if (confirm('클라우드에서 데이터를 복원하시겠습니까? 현재 데이터가 덮어쓰여집니다.')) {
       try {
         const restoredData = await cloudRestore();
         
-        saveData(restoredData.equipmentData);
-        saveFormFields(restoredData.formFields);
-        logDetailedChange('클라우드 복원', 'N/A', null, null);
-        
-        alert('클라우드에서 데이터가 성공적으로 복원되었습니다.');
-        // 상태 동기화를 위한 storage 이벤트 트리거
-        window.dispatchEvent(new Event('storage'));
+        if (restoredData) {
+          // 모든 로그 누적 보존 (기존 + 복원 + 복원 로그)
+          const restoredDataWithLog = {
+            ...restoredData,
+            logData: [
+              ...(logData || []),
+              ...(restoredData.logData || []),
+              {
+                id: Date.now() + Math.random() + '',
+                timestamp: new Date().toISOString(),
+                action: '클라우드 복원',
+                itemCode: 'N/A',
+                itemName: '장비 데이터 전체',
+                userId: 'system',
+                summary: '클라우드 백업에서 데이터가 성공적으로 복원되었습니다.'
+              }
+            ]
+          };
+
+          saveData(restoredDataWithLog.equipmentData);
+          saveFormFields(restoredDataWithLog.formFields);
+          logDetailedChange('클라우드 복원', 'N/A', null, null);
+          
+          alert('클라우드 백업에서 데이터를 성공적으로 복원했습니다.');
+          // 상태 동기화를 위한 storage 이벤트 트리거
+          window.dispatchEvent(new Event('storage'));
+        }
       } catch (error) {
         alert(error instanceof Error ? error.message : '클라우드 복원에 실패했습니다.');
       }
