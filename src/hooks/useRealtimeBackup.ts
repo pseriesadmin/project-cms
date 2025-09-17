@@ -214,7 +214,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
         throw new Error(result.error || '백업 처리 실패');
       }
 
-      console.log(`✅ 실시간 백업 성공 (${dataType}, 유형: ${backupType}):`, result);
+      // console.log(`✅ 실시간 백업 성공 (${dataType}, 유형: ${backupType}):`, result); // 트래픽 최적화
       
     } catch (error) {
       console.error(`❌ 백업 실패 (${dataType}):`, error);
@@ -315,7 +315,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
         ? `/api/project?userId=${userId}${cacheParam}`
         : `/api/backup${cacheParam ? `?nocache=${Date.now()}` : ''}`;
 
-      console.log(`🔄 [restoreFromCloud] 클라우드 복원 시도 (캐시무시: ${ignoreCacheOption})`);
+      // console.log(`🔄 [restoreFromCloud] 클라우드 복원 시도 (캐시무시: ${ignoreCacheOption})`); // 트래픽 최적화
 
       const response = await fetch(apiEndpoint, {
         // 캐시 무시 헤더 추가 (최소한의 설정)
@@ -362,7 +362,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
       const restoredData = result.projectData || result.data;
       
       if (restoredData) {
-        console.log(`✅ [useRealtimeBackup] ${dataType} 클라우드 복원 성공`);
+        // console.log(`✅ [useRealtimeBackup] ${dataType} 클라우드 복원 성공`); // 트래픽 최적화
         return restoredData;
       } else {
         console.log(`📭 [useRealtimeBackup] ${dataType} 데이터 없음`);

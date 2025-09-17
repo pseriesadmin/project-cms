@@ -126,7 +126,7 @@ export const useProjectSync = (
         Promise.resolve(), // 로컬은 이미 저장됨
         cloudSave(data, { backupType: 'MANUAL' })
       ]).then(() => {
-        console.log('⚡ [useProjectSync] 즉시 동기화 완료');
+        // console.log('⚡ [useProjectSync] 즉시 동기화 완료'); // 트래픽 최적화
       }).catch(error => {
         console.error('❌ [useProjectSync] 즉시 동기화 실패:', error);
       });
@@ -138,7 +138,7 @@ export const useProjectSync = (
       
       backupTimeoutRef.current = setTimeout(() => {
         cloudSave(data, { backupType: 'MANUAL' });
-        console.log('📁 [useProjectSync] 디바운스된 클라우드 백업 실행');
+        // console.log('📁 [useProjectSync] 디바운스된 클라우드 백업 실행'); // 트래픽 최적화
       }, 2000); // 2초 디바운스
     }
   }, [cloudSave, syncStrategy]);
@@ -217,7 +217,7 @@ export const useProjectSync = (
       try {
         if (showLoading) {
           setIsSyncing(true);
-          console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시');
+          // console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시'); // 트래픽 최적화
         }
 
         const localData = localStorage.getItem('crazyshot_project_data');
@@ -249,7 +249,7 @@ export const useProjectSync = (
             });
             
             setLastSyncTime(new Date());
-            console.log('✅ [useProjectSync] 데이터 병합 동기화 완료');
+            // console.log('✅ [useProjectSync] 데이터 병합 동기화 완료'); // 트래픽 최적화
           } else {
             console.log('🔄 [useProjectSync] 변경 사항 없음 - 동기화 생략');
           }
@@ -302,7 +302,7 @@ export const useProjectSync = (
       } finally {
         if (showLoading) {
           setIsSyncing(false);
-          console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제');
+          // console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제'); // 트래픽 최적화
         }
       }
     };
@@ -312,7 +312,7 @@ export const useProjectSync = (
 
   // 주기적 버전 체크 및 자동 복원 (자동 복원만 활성화)
   useEffect(() => {
-    console.log('✅ [useProjectSync] 자동 복원 동기화 활성화 - 백업은 수동');
+    // console.log('✅ [useProjectSync] 자동 복원 동기화 활성화 - 백업은 수동'); // 트래픽 최적화
     
     // 자동 복원 동기화 활성화 (백업은 수동)
     if (autoRestore) {
@@ -396,7 +396,7 @@ export const useProjectSync = (
         if (backupTimeoutRef.current) {
           clearTimeout(backupTimeoutRef.current);
         }
-        console.log('🛑 [useProjectSync] 자동 복원 동기화 및 백업 타이머 정리');
+        // console.log('🛑 [useProjectSync] 자동 복원 동기화 및 백업 타이머 정리'); // 트래픽 최적화
       };
     }
     
@@ -435,7 +435,7 @@ export const useProjectSync = (
       const cloudData = await cloudRestore(ignoreCacheOption);
       
       if (cloudData) {
-        console.log('✅ 클라우드 복원 성공');
+        // console.log('✅ 클라우드 복원 성공'); // 트래픽 최적화
         return cloudData;
       }
       

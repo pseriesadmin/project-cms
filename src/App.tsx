@@ -74,12 +74,27 @@ const App: React.FC = () => {
     activeCheckInterval: 60000 // 1분마다 확인
   });
 
-  console.log(`🏠 [App] useUserSession 호출 결과:`, {
-    activeUsers,
-    hasMultipleUsers,
-    recentActionsCount: recentActions.length,
-    현재시간: new Date().toISOString()
-  });
+  // 로깅 빈도 제한 (트래픽 최적화) - 30초마다만 로깅
+  const shouldLog = React.useMemo(() => {
+    const now = Date.now();
+    const lastLogTime = localStorage.getItem('lastUserSessionLogTime');
+    const timeSinceLastLog = lastLogTime ? now - parseInt(lastLogTime) : Infinity;
+    
+    if (timeSinceLastLog > 30000) { // 30초마다만 로깅
+      localStorage.setItem('lastUserSessionLogTime', now.toString());
+      return true;
+    }
+    return false;
+  }, [activeUsers.count, hasMultipleUsers]);
+
+  if (shouldLog && process.env.NODE_ENV === 'development') {
+    console.log(`🏠 [App] useUserSession 호출 결과 (30초 제한):`, {
+      activeUsers,
+      hasMultipleUsers,
+      recentActionsCount: recentActions.length,
+      현재시간: new Date().toISOString()
+    });
+  }
 
   const status = { 
     hasMultipleUsers, 
@@ -142,13 +157,13 @@ const App: React.FC = () => {
     let isInitialLoad = true;
     
     if (isInitialLoad) {
-      console.log('🌐 [App] 도메인 첫 진입 - 캐시 무시 클라우드 복원 시도');
+      // console.log('🌐 [App] 도메인 첫 진입 - 캐시 무시 클라우드 복원 시도'); // 트래픽 최적화
       
       // 500ms 딜레이 후 캐시 무시 복원 시도 (초기 로딩 충돌 방지)
       const timer = setTimeout(async () => {
         try {
           await cloudRestore(true); // 캐시 무시 복원
-          console.log('✅ [App] 도메인 첫 진입 클라우드 복원 완료');
+          // console.log('✅ [App] 도메인 첫 진입 클라우드 복원 완료'); // 트래픽 최적화
         } catch (error) {
           console.warn('⚠️ [App] 도메인 첫 진입 클라우드 복원 실패:', error);
         }
@@ -170,13 +185,28 @@ const App: React.FC = () => {
 
   // 다중 사용자 감지 시 강화된 경고 표시 및 스마트 동기화
   useEffect(() => {
-    console.log(`🚨 [App] 다중 사용자 알림 useEffect 실행:`, {
-      hasMultipleUsers: status.hasMultipleUsers,
-      activeUserCount: status.activeUserCount,
-      showUserSnackbar,
-      조건충족: status.hasMultipleUsers && !showUserSnackbar,
-      시간: new Date().toISOString()
-    });
+    // 로깅 빈도 제한 (트래픽 최적화) - 1분마다만 로깅
+    const shouldLogMultiUser = (() => {
+      const now = Date.now();
+      const lastLogTime = localStorage.getItem('lastMultiUserLogTime');
+      const timeSinceLastLog = lastLogTime ? now - parseInt(lastLogTime) : Infinity;
+      
+      if (timeSinceLastLog > 60000) { // 1분마다만 로깅
+        localStorage.setItem('lastMultiUserLogTime', now.toString());
+        return true;
+      }
+      return false;
+    })();
+
+    if (shouldLogMultiUser && process.env.NODE_ENV === 'development') {
+      console.log(`🚨 [App] 다중 사용자 알림 useEffect 실행 (1분 제한):`, {
+        hasMultipleUsers: status.hasMultipleUsers,
+        activeUserCount: status.activeUserCount,
+        showUserSnackbar,
+        조건충족: status.hasMultipleUsers && !showUserSnackbar,
+        시간: new Date().toISOString()
+      });
+    }
     
     if (status.hasMultipleUsers && !showUserSnackbar) {
       console.log(`📢 [App] 다중 사용자 감지! 경고 스낵바 표시 시작`);
