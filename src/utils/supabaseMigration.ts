@@ -5,11 +5,11 @@
 
 import { 
   Equipment, 
-  FormField, 
-  EquipmentLogEntry, 
-  LogArchive, 
-  VersionHistory, 
-  CategoryCode 
+  FormField,
+  EquipmentLogEntry,
+  LogArchive,
+  VersionHistory,
+  CategoryCode
 } from '../types';
 
 // Supabase 데이터베이스 타입 정의
@@ -49,6 +49,45 @@ export interface SupabaseFormField {
   active: boolean;
   core: boolean;
   hidden_at?: string;
+}
+
+// 추가된 Supabase 로그 및 아카이브 인터페이스
+export interface SupabaseEquipmentLogEntry {
+  id?: number;
+  created_at?: string;
+  log_id: string;
+  timestamp: string;
+  action: string;
+  item_code: string;
+  item_name: string;
+  user_id: string;
+  changes?: Record<string, any>;
+  summary?: string;
+}
+
+export interface SupabaseLogArchive {
+  id?: number;
+  created_at?: string;
+  archived_at: string;
+  logs: SupabaseEquipmentLogEntry[];
+}
+
+export interface SupabaseVersionHistory {
+  id?: number;
+  created_at?: string;
+  version: string;
+  date: string;
+  summary: string;
+  details: string;
+}
+
+export interface SupbaseCategoryCode {
+  id?: number;
+  created_at?: string;
+  updated_at?: string;
+  code_id: string;
+  code: string;
+  name: string;
 }
 
 /**
@@ -186,6 +225,105 @@ export function supabaseToFormField(supabaseData: SupabaseFormField): FormField 
     active: supabaseData.active,
     core: supabaseData.core,
     hiddenAt: supabaseData.hidden_at
+  };
+}
+
+/**
+ * EquipmentLogEntry를 Supabase 형태로 변환
+ */
+export function logEntryToSupabase(logEntry: EquipmentLogEntry): SupabaseEquipmentLogEntry {
+  return {
+    log_id: logEntry.id,
+    timestamp: logEntry.timestamp,
+    action: logEntry.action,
+    item_code: logEntry.itemCode,
+    item_name: logEntry.itemName,
+    user_id: logEntry.userId,
+    changes: logEntry.changes || undefined,
+    summary: logEntry.summary
+  };
+}
+
+/**
+ * Supabase 로그 엔트리를 기존 형태로 변환
+ */
+export function supabaseToLogEntry(supabaseLogEntry: SupabaseEquipmentLogEntry): EquipmentLogEntry {
+  return {
+    id: supabaseLogEntry.log_id,
+    timestamp: supabaseLogEntry.timestamp,
+    action: supabaseLogEntry.action,
+    itemCode: supabaseLogEntry.item_code,
+    itemName: supabaseLogEntry.item_name,
+    userId: supabaseLogEntry.user_id,
+    changes: supabaseLogEntry.changes || null,
+    summary: supabaseLogEntry.summary || ''
+  };
+}
+
+/**
+ * LogArchive를 Supabase 형태로 변환
+ */
+export function logArchiveToSupabase(logArchive: LogArchive): SupabaseLogArchive {
+  return {
+    archived_at: logArchive.archivedAt,
+    logs: logArchive.logs.map(logEntryToSupabase)
+  };
+}
+
+/**
+ * Supabase LogArchive를 기존 형태로 변환
+ */
+export function supabaseToLogArchive(supabaseLogArchive: SupabaseLogArchive): LogArchive {
+  return {
+    archivedAt: supabaseLogArchive.archived_at,
+    logs: supabaseLogArchive.logs.map(supabaseToLogEntry)
+  };
+}
+
+/**
+ * VersionHistory를 Supabase 형태로 변환
+ */
+export function versionHistoryToSupabase(versionHistory: VersionHistory): SupabaseVersionHistory {
+  return {
+    version: versionHistory.version,
+    date: versionHistory.date,
+    summary: versionHistory.summary,
+    details: versionHistory.details
+  };
+}
+
+/**
+ * Supabase VersionHistory를 기존 형태로 변환
+ */
+export function supabaseToVersionHistory(supabaseVersionHistory: SupabaseVersionHistory): VersionHistory {
+  return {
+    version: supabaseVersionHistory.version,
+    date: supabaseVersionHistory.date,
+    summary: supabaseVersionHistory.summary,
+    details: supabaseVersionHistory.details
+  };
+}
+
+/**
+ * CategoryCode를 Supabase 형태로 변환
+ */
+export function categoryCodeToSupabase(categoryCode: CategoryCode): SupbaseCategoryCode {
+  return {
+    code_id: categoryCode.id,
+    code: categoryCode.code,
+    name: categoryCode.name
+  };
+}
+
+/**
+ * Supabase CategoryCode를 기존 형태로 변환
+ */
+export function supabaseToCategoryCode(supabaseCategoryCode: SupbaseCategoryCode): CategoryCode {
+  return {
+    id: supabaseCategoryCode.code_id,
+    code: supabaseCategoryCode.code,
+    name: supabaseCategoryCode.name,
+    createdAt: supabaseCategoryCode.created_at || new Date().toISOString()
   };
 }
 
