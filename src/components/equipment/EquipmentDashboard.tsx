@@ -27,7 +27,9 @@ export const EquipmentDashboard: React.FC = () => {
     saveData,
     saveFormFields,
     logDetailedChange,
-    VERSION_HISTORY
+    VERSION_HISTORY,
+    backupState,  // 추가
+    isOnline      // 추가
   } = useEquipmentData();
 
   const {
@@ -314,6 +316,8 @@ export const EquipmentDashboard: React.FC = () => {
           saveFormFields={saveFormFields}
           logDetailedChange={logDetailedChange}
           versionHistory={VERSION_HISTORY}
+          backupState={backupState}
+          isOnline={isOnline}
         />
 
         {/* KPI 섹션 */}

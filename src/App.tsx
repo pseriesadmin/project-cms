@@ -828,11 +828,7 @@ const App: React.FC = () => {
                                        <span>현재 버전: {displayVersion.slice(-8)}</span>
                                      );
                                    })()}
-                                   {isSyncing ? (
-                                     <span className="ml-2 text-blue-600">🔄 데이터 복원 중...</span>
-                                   ) : isAutoSyncWorking && (
-                                     <span className="ml-2 text-green-600">✓ 자동 복원 동기화 활성</span>
-                                   )}
+                                   {/* 데이터 복원 알림 제거 */}
                                  </div>
                                  <button onClick={handleBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
                                      <SaveIcon className="w-4 h-4" /> 파일 백업
@@ -844,6 +840,11 @@ const App: React.FC = () => {
                                 <button onClick={downloadAsCSV} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-crazy-blue rounded-lg shadow-md hover:bg-crazy-bright-blue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-bright-blue transition-colors">
                                     <DownloadIcon className="w-4 h-4" /> 엑셀 내보내기
                                 </button>
+                                {isSyncing ? (
+                                    <span className="ml-2 text-xs text-blue-600">🔄 데이터 복원 중...</span>
+                                ) : isAutoSyncWorking && (
+                                    <span className="ml-2 text-xs text-green-600">✓ 자동 복원 동기화 활성</span>
+                                )}
                                 {/* 개발 환경에서만 표시되는 버튼들 */}
                                 {process.env.NODE_ENV === 'development' && (
                                   <>
