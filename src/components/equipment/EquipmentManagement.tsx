@@ -289,7 +289,7 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977 4.5 4.5 0 014.496 4.97.75.75 0 01-.994.668l-.274-.097a.75.75 0 01-.394-.461 3 3 0 00-5.856-.961 3.5 3.5 0 01-4.256 4.803z" />
           </svg>
-          클라우드 백업
+          로컬 백업
         </button>
         
         <button
@@ -300,7 +300,7 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
             <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977 4.5 4.5 0 014.496 4.97.75.75 0 01-.994.668l-.274-.097a.75.75 0 01-.394-.461 3 3 0 00-5.856-.961 3.5 3.5 0 01-4.256 4.803z" />
             <path fillRule="evenodd" d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977 4.5 4.5 0 014.496 4.97.75.75 0 01-.994.668l-.274-.097a.75.75 0 01-.394-.461 3 3 0 00-5.856-.961 3.5 3.5 0 01-4.256 4.803zM9 8a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 019 8z" clipRule="evenodd" />
           </svg>
-          클라우드 복원
+          로컬 복원
         </button>
         
         <button

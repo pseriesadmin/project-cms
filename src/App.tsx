@@ -722,10 +722,10 @@ const App: React.FC = () => {
                                  {shouldShowCloudButtons && (
                                    <>
                                      <button onClick={handleCloudBackup} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
-                                         <CloudUploadIcon className="w-4 h-4" /> 클라우드 백업
+                                         <CloudUploadIcon className="w-4 h-4" /> 로컬 백업
                                      </button>
                                      <button onClick={handleCloudRestore} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-crazy-blue bg-white border border-crazy-blue rounded-lg shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-crazy-blue transition-colors">
-                                         <CloudDownloadIcon className="w-4 h-4" /> 클라우드 복원
+                                         <CloudDownloadIcon className="w-4 h-4" /> 로컬 복원
                                      </button>
                                    </>
                                  )}
