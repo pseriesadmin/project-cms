@@ -613,6 +613,16 @@ const App: React.FC = () => {
         Object.assign(draft, restoredDataWithLog);
       });
       
+      // 즉시 클라우드 백업으로 다른 사용자에게 동기화
+      setTimeout(async () => {
+        try {
+          await cloudBackup(restoredDataWithLog);
+          console.log('✅ [App] 파일 복원 후 클라우드 동기화 완료');
+        } catch (backupError) {
+          console.warn('⚠️ [App] 파일 복원 후 클라우드 백업 실패:', backupError);
+        }
+      }, 100); // 상태 업데이트 후 실행
+      
       setDataToRestore(null);
       alert('데이터 복원이 완료되었습니다.');
     } catch (error) {

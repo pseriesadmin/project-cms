@@ -256,6 +256,17 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
         logDetailedChange('파일 복원', 'N/A', null, null);
         
         alert('파일에서 데이터가 성공적으로 복원되었습니다.');
+        
+        // 즉시 클라우드 백업으로 다른 사용자에게 동기화
+        setTimeout(async () => {
+          try {
+            await handleCloudBackup();
+            console.log('✅ [EquipmentManagement] 파일 복원 후 클라우드 동기화 완료');
+          } catch (backupError) {
+            console.warn('⚠️ [EquipmentManagement] 파일 복원 후 클라우드 백업 실패:', backupError);
+          }
+        }, 100); // 상태 업데이트 후 실행
+        
         // 상태 동기화를 위한 storage 이벤트 트리거
         window.dispatchEvent(new Event('storage'));
       } catch (error) {
