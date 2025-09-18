@@ -18,7 +18,7 @@ export const useProjectSync = (
   const {
     autoSave = false,
     autoRestore = true,
-    syncInterval = 60000,
+    syncInterval = 15000, // 15초로 단축 (실시간성 향상)
     pauseSync = false,
     syncStrategy = 'debounce'
   } = options;
@@ -26,7 +26,7 @@ export const useProjectSync = (
   // 백업 타임아웃 참조 추가
   const backupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 실시간 백업 시스템 통합
+  // 실시간 백업 시스템 통합 (사용자 ID 개선)
   const {
     saveToCloud: cloudSave,
     restoreFromCloud: cloudRestore,
@@ -34,25 +34,45 @@ export const useProjectSync = (
     isOnline
   } = useRealtimeBackup<ProjectData>({
     dataType: 'project',
-    userId: localStorage.getItem('userId') || 'anonymous',
+    userId: localStorage.getItem('crazyshot_session_id') || localStorage.getItem('userId') || 'anonymous',
     autoSaveInterval: 300000 // 5분 (트래픽 최적화)
   });
 
-  // 로컬 저장소에서 프로젝트 데이터 복원
+  // 로컬 저장소에서 프로젝트 데이터 복원 (강화된 검증 로직)
   const restoreFromLocal = useCallback(() => {
     try {
       const savedData = localStorage.getItem('crazyshot_project_data');
       if (savedData) {
-        const parsedData = JSON.parse(savedData);
-        setProjectData(parsedData);
-        setLastSyncTime(new Date());
-        return parsedData;
+        try {
+          const parsedData = JSON.parse(savedData);
+          
+          // 데이터 구조 엄격 검증
+          const isValidData = 
+            parsedData && 
+            Array.isArray(parsedData.projectPhases) && 
+            Array.isArray(parsedData.logs) &&
+            typeof parsedData.version === 'string';
+          
+          if (!isValidData) {
+            console.warn('⚠️ 유효하지 않은 로컬 데이터 구조');
+            localStorage.removeItem('crazyshot_project_data');
+            return null;
+          }
+          
+          setProjectData(parsedData);
+          setLastSyncTime(new Date());
+          return parsedData;
+        } catch (parseError) {
+          console.error('❌ 로컬 데이터 파싱 오류:', parseError);
+          localStorage.removeItem('crazyshot_project_data');
+          return null;
+        }
       } else {
         return null;
       }
     } catch (error) {
-      console.error('❌ 로컬 복원 중 오류:', error);
-      throw error;
+      console.error('❌ 로컬 복원 중 예상치 못한 오류:', error);
+      return null;
     }
   }, []);
 
@@ -188,10 +208,15 @@ export const useProjectSync = (
             // 1. 즉시 로컬 저장
             saveToLocal(updatedData);
             
-            // 2. 조건부 즉시 클라우드 백업 (온라인 상태 + 사용자 활성 상태)
+            // 2. 조건부 즉시 클라우드 백업 (온라인 상태 + 사용자 활성 상태 + 데이터 크기 검증)
             if (backupState.isOnline && !pauseSync) {
-              cloudSave(updatedData, { backupType: 'MANUAL' });
-              console.log('📁 [useProjectSync] 즉시 로컬 저장 + 즉시 클라우드 백업 (자동 저장 비활성화)');
+              const dataSize = JSON.stringify(updatedData).length;
+              if (dataSize < 1000000) { // 1MB 미만만 백업
+                cloudSave(updatedData, { backupType: 'MANUAL' });
+                console.log('📁 [useProjectSync] 즉시 로컬 저장 + 즉시 클라우드 백업 (자동 저장 비활성화)');
+              } else {
+                console.warn('⚠️ [useProjectSync] 페이로드 크기 초과 - 클라우드 백업 생략');
+              }
             } else {
               console.log('📁 [useProjectSync] 즉시 로컬 저장 (클라우드 백업 조건 미충족, 자동 저장 비활성화)');
             }
@@ -231,8 +256,8 @@ export const useProjectSync = (
           parsedLocalData = null;
         }
 
-        // 클라우드 복원 시 최소 페이로드 요청
-        const cloudData = await performCloudRestore(false);
+        // 클라우드 복원 시 캐시 무시로 최신 데이터 확보
+        const cloudData = await performCloudRestore(true);
         
         // 데이터 복원 및 동기화 로직 개선 (브라우저 캐시 삭제 대응)
         if (parsedLocalData && cloudData) {
@@ -340,8 +365,8 @@ export const useProjectSync = (
               parsedLocalData = null;
             }
 
-             // 클라우드 복원 시 최소 페이로드 요청
-             const cloudData = await performCloudRestore(false);
+             // 클라우드 복원 시 캐시 무시로 최신 데이터 확보
+             const cloudData = await performCloudRestore(true);
             
             // 데이터 복원 및 동기화 로직 개선 (주기적 동기화)
             if (parsedLocalData && cloudData) {
