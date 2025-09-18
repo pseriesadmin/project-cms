@@ -171,13 +171,13 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
       const payload = dataType === 'project' 
         ? { 
             projectData: data, 
-            userId, 
+            userId: dataType === 'project' ? 'shared_project' : userId, // 공통 프로젝트 백업 
             backupType, 
             backupSource 
           }
         : { 
             ...data as any, 
-            userId, 
+            userId, // 장비 데이터는 개별 사용자 유지
             backupType, 
             backupSource 
           };
@@ -308,7 +308,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
       // 캐시 무시 쿼리 파라미터 추가 (도메인 첫 진입 시 또는 요청 시)
       const cacheParam = ignoreCacheOption ? `&nocache=${Date.now()}` : '';
       const apiEndpoint = dataType === 'project' 
-        ? `/api/project?userId=${userId}${cacheParam}`
+        ? `/api/project?userId=${dataType === 'project' ? 'shared_project' : userId}${cacheParam}`
         : `/api/backup${cacheParam ? `?nocache=${Date.now()}` : ''}`;
 
       console.log(`🔄 [restoreFromCloud] 클라우드 복원 시도 (캐시무시: ${ignoreCacheOption})`);
