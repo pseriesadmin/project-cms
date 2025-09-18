@@ -175,18 +175,26 @@ export const useProjectSync = (
         const timestamp = new Date().toLocaleString('ko-KR');
         const version = generateVersion(finalData);
         
-        // 로그 정리 및 중복 제거
+        // 로그 정리 및 중복 제거 (공격적 정리)
         const cleanLogs = (logs: any[]) => {
+          // 중복 제거
           const uniqueLogs = logs.filter((log, index, arr) => 
             index === arr.findIndex(l => l.timestamp === log.timestamp && l.message === log.message)
           );
           
-          // 최근 50개 로그만 유지
-          if (uniqueLogs.length > 50) {
-            return uniqueLogs.slice(-50);
+          // 데이터 크기가 큰 경우 더 공격적으로 정리
+          const dataSize = JSON.stringify(uniqueLogs).length;
+          let maxLogs = 50;
+          
+          if (dataSize > 500000) { // 500KB 초과 시
+            maxLogs = 20; // 20개만 유지
+            console.warn('⚠️ 로그 데이터 크기 초과 - 공격적 정리 (20개 유지)');
+          } else if (dataSize > 200000) { // 200KB 초과 시
+            maxLogs = 30; // 30개만 유지
+            console.warn('⚠️ 로그 데이터 크기 주의 - 중간 정리 (30개 유지)');
           }
           
-          return uniqueLogs;
+          return uniqueLogs.slice(-maxLogs);
         };
 
         const newLog = {

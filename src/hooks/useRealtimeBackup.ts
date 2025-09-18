@@ -238,6 +238,13 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
     } = {}) => {
       // 실질적 변경 데이터만 백업
       if (shouldPerformBackup(data)) {
+        // 페이로드 크기 검증 추가
+        const dataSize = JSON.stringify(data).length;
+        if (dataSize >= 1000000) { // 1MB 이상 시 백업 생략
+          console.warn('⚠️ [debouncedBackup] 페이로드 크기 초과 - 디바운스 백업 생략:', dataSize);
+          return;
+        }
+        
         try {
           await performBackup(data, options);
           
@@ -266,6 +273,13 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
       backupType = 'AUTO', 
       backupSource = '자동 백업'
     } = options;
+
+    // 페이로드 크기 사전 검증
+    const dataSize = JSON.stringify(data).length;
+    if (dataSize >= 1000000) { // 1MB 이상 시 백업 생략
+      console.warn('⚠️ [saveToCloud] 페이로드 크기 초과 - 클라우드 백업 생략:', dataSize);
+      return;
+    }
 
     // 온라인 상태에서만 백업 실행
     if (backupState.isOnline) {
