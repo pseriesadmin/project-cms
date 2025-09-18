@@ -175,16 +175,29 @@ export const useProjectSync = (
         const timestamp = new Date().toLocaleString('ko-KR');
         const version = generateVersion(finalData);
         
+        // 로그 정리 및 중복 제거
+        const cleanLogs = (logs: any[]) => {
+          const uniqueLogs = logs.filter((log, index, arr) => 
+            index === arr.findIndex(l => l.timestamp === log.timestamp && l.message === log.message)
+          );
+          
+          // 최근 50개 로그만 유지
+          if (uniqueLogs.length > 50) {
+            return uniqueLogs.slice(-50);
+          }
+          
+          return uniqueLogs;
+        };
+
+        const newLog = {
+          timestamp,
+          message: `데이터 업데이트 (버전: ${version})`,
+          version
+        };
+
         const updatedData = {
           ...finalData,
-          logs: [
-            ...finalData.logs,
-            {
-              timestamp,
-              message: `데이터 업데이트 (버전: ${version})`,
-              version
-            }
-          ]
+          logs: cleanLogs([...finalData.logs, newLog])
         };
         
         if (autoSave) {
@@ -192,10 +205,15 @@ export const useProjectSync = (
             // 1. 즉시 로컬 저장
             saveToLocal(updatedData);
             
-            // 2. 조건부 즉시 클라우드 백업 (온라인 상태 + 사용자 활성 상태)
+            // 2. 조건부 즉시 클라우드 백업 (온라인 상태 + 사용자 활성 상태 + 데이터 크기 검증)
             if (backupState.isOnline && !pauseSync) {
-              cloudSave(updatedData, { backupType: 'MANUAL' });
-              console.log('📁 [useProjectSync] 즉시 로컬 저장 + 즉시 클라우드 백업');
+              const dataSize = JSON.stringify(updatedData).length;
+              if (dataSize < 1000000) { // 1MB 미만만 백업
+                cloudSave(updatedData, { backupType: 'MANUAL' });
+                console.log('📁 [useProjectSync] 즉시 로컬 저장 + 즉시 클라우드 백업');
+              } else {
+                console.warn('⚠️ [useProjectSync] 페이로드 크기 초과 - 클라우드 백업 생략 (자동 저장)');
+              }
             } else {
               console.log('📁 [useProjectSync] 즉시 로컬 저장 (클라우드 백업 조건 미충족)');
             }
@@ -242,7 +260,7 @@ export const useProjectSync = (
       try {
         if (showLoading) {
           setIsSyncing(true);
-          // console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시'); // 트래픽 최적화
+          console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시');
         }
 
         const localData = localStorage.getItem('crazyshot_project_data');
@@ -274,7 +292,7 @@ export const useProjectSync = (
             });
             
             setLastSyncTime(new Date());
-            // console.log('✅ [useProjectSync] 데이터 병합 동기화 완료'); // 트래픽 최적화
+            console.log('✅ [useProjectSync] 데이터 병합 동기화 완료');
           } else {
             console.log('🔄 [useProjectSync] 변경 사항 없음 - 동기화 생략');
           }
@@ -327,7 +345,7 @@ export const useProjectSync = (
       } finally {
         if (showLoading) {
           setIsSyncing(false);
-          // console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제'); // 트래픽 최적화
+          console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제');
         }
       }
     };
@@ -337,7 +355,7 @@ export const useProjectSync = (
 
   // 주기적 버전 체크 및 자동 복원 (자동 복원만 활성화)
   useEffect(() => {
-    // console.log('✅ [useProjectSync] 자동 복원 동기화 활성화 - 백업은 수동'); // 트래픽 최적화
+    console.log('✅ [useProjectSync] 자동 복원 동기화 활성화 - 백업은 수동');
     
     // 자동 복원 동기화 활성화 (백업은 수동)
     if (autoRestore) {
@@ -421,7 +439,7 @@ export const useProjectSync = (
         if (backupTimeoutRef.current) {
           clearTimeout(backupTimeoutRef.current);
         }
-        // console.log('🛑 [useProjectSync] 자동 복원 동기화 및 백업 타이머 정리'); // 트래픽 최적화
+        console.log('🛑 [useProjectSync] 자동 복원 동기화 및 백업 타이머 정리');
       };
     }
     

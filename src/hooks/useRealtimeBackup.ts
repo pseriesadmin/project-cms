@@ -198,17 +198,23 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
         throw new Error(result.error || '백업 처리 실패');
       }
 
-      // console.log(`✅ 실시간 백업 성공 (${dataType}, 유형: ${backupType}):`, result); // 트래픽 최적화
+      console.log(`✅ 실시간 백업 성공 (${dataType}, 유형: ${backupType}):`, result);
       
     } catch (error) {
       console.error(`❌ 백업 실패 (${dataType}):`, error);
       
-      // 재시도 로직 최소화
-      if (retryCount < maxRetries && backupState.isOnline) {
+      // 413 에러는 재시도하지 않음 (페이로드 크기 문제)
+      const is413Error = error instanceof Error && error.message.includes('413');
+      
+      if (!is413Error && retryCount < maxRetries && backupState.isOnline) {
         retryTimeoutRef.current = setTimeout(() => {
           performBackup(data, options, retryCount + 1);
         }, retryDelay * (retryCount + 1));
         return;
+      }
+      
+      if (is413Error) {
+        console.warn('⚠️ 413 에러 감지 - 재시도 중단, 데이터 정리 권장');
       }
       
       throw error;
@@ -291,7 +297,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
         ? `/api/project?userId=${userId}${cacheParam}`
         : `/api/backup${cacheParam ? `?nocache=${Date.now()}` : ''}`;
 
-      // console.log(`🔄 [restoreFromCloud] 클라우드 복원 시도 (캐시무시: ${ignoreCacheOption})`); // 트래픽 최적화
+      console.log(`🔄 [restoreFromCloud] 클라우드 복원 시도 (캐시무시: ${ignoreCacheOption})`);
 
       const response = await fetch(apiEndpoint, {
         // 캐시 무시 헤더 추가 (최소한의 설정)
@@ -338,7 +344,7 @@ export const useRealtimeBackup = <T>(options: RealtimeBackupOptions) => {
       const restoredData = result.projectData || result.data;
       
       if (restoredData) {
-        // console.log(`✅ [useRealtimeBackup] ${dataType} 클라우드 복원 성공`); // 트래픽 최적화
+        console.log(`✅ [useRealtimeBackup] ${dataType} 클라우드 복원 성공`);
         return restoredData;
       } else {
         console.log(`📭 [useRealtimeBackup] ${dataType} 데이터 없음`);
