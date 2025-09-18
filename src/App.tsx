@@ -623,6 +623,9 @@ const App: React.FC = () => {
         }
       }, 100); // 상태 업데이트 후 실행
       
+      // 상태 동기화를 위한 storage 이벤트 트리거 (장비현황과 동일한 패턴)
+      window.dispatchEvent(new Event('storage'));
+      
       setDataToRestore(null);
       alert('데이터 복원이 완료되었습니다.');
     } catch (error) {
