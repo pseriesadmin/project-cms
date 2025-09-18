@@ -13,6 +13,7 @@ import { useProjectSync } from './hooks/useProjectSync';
 import { TopSnackbar, BottomSnackbar } from './components/common/TopSnackbar';
 import { useUserSession } from './hooks/useRealtimeBackup';
 import { useActivityOptimizer } from './hooks/useActivityOptimizer';
+import { advancedFileSystemBackup } from './utils/backupUtils';
 
 type TabId = 'workflow' | 'dashboard';
 
@@ -398,52 +399,20 @@ const App: React.FC = () => {
   
   const handleBackup = async () => {
     try {
-      const dataStr = JSON.stringify(projectData, null, 2);
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const fileName = `크레이지샷_개발현황백업_${year}-${month}-${day}.json`;
-
-      // 브라우저 File System Access API 지원 여부 확인
-      if ('showDirectoryPicker' in window && window.isSecureContext) {
-        try {
-          // 디렉토리 선택 대화상자 열기
-          const dirHandle = await (window as any).showDirectoryPicker({ 
-            mode: 'readwrite' 
-          });
-
-          // 파일 생성 및 쓰기
-          const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(dataStr);
-          await writable.close();
-
-          alert(`✅ 개발현황 데이터가 ${fileName}으로 성공적으로 백업되었습니다.`);
-          return;
-        } catch (error: any) {
-          // 사용자가 취소한 경우 (AbortError 또는 NotAllowedError)
-          if (error.name === 'AbortError' || error.name === 'NotAllowedError') {
-            return; // 취소 시 아무것도 하지 않음
-          }
-          
-          // 실제 오류 발생 시에만 폴백 다운로드 실행
+      // 새로운 고급 백업 함수 사용
+      await advancedFileSystemBackup(projectData, {
+        filePrefix: '크레이지샷_개발현황백업',
+        onSuccess: (fileName) => {
+          // 추가 성공 처리 로직 (옵션)
+          console.log(`개발현황 백업 완료: ${fileName}`);
+        },
+        onError: (error) => {
+          // 추가 오류 처리 로직 (옵션)
+          console.error('개발현황 백업 중 오류:', error);
         }
-      }
-
-      // File System Access API 미지원 시 또는 실제 오류 시에만 기본 다운로드
-      const blob = new Blob([dataStr], { type: 'application/json' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-      
-      alert(`✅ 개발현황 데이터가 ${fileName}으로 성공적으로 백업되었습니다.`);
+      });
     } catch (error) {
-      alert("정보를 백업하는 데 실패했습니다.");
+      console.error('백업 중 예상치 못한 오류:', error);
     }
   };
 

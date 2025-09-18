@@ -125,7 +125,7 @@ export const useEquipmentData = () => {
   const [formFields, setFormFields] = useState<FormField[]>(defaultFormFields);
   const [isFirstRun, setIsFirstRun] = useState(true);
 
-  // 실시간 백업 시스템 통합
+  // 실시간 백업 시스템 통합 (백업 빈도 증가)
   const {
     saveToCloud: cloudSave,
     restoreFromCloud: cloudRestore,
@@ -139,8 +139,73 @@ export const useEquipmentData = () => {
   }>({
     dataType: 'equipment',
     userId: localStorage.getItem('userId') || 'anonymous',
-    autoSaveInterval: 45000 // 45초마다 자동 백업
+    autoSaveInterval: 15000 // 15초마다 자동 백업 (빈도 증가)
   });
+
+  // 데이터 병합 함수 추가 (로그 누적 방식)
+  const safeMergeData = useCallback((localData: Equipment[], cloudData: Equipment[]): Equipment[] => {
+    // 고유 식별자 기준 병합 (중복 제거)
+    const mergedData = [
+      ...localData,
+      ...cloudData
+    ].filter(
+      (item, index, self) => 
+        index === self.findIndex(t => t.code === item.code)
+    );
+
+    return mergedData;
+  }, []);
+
+  // 로그 누적 및 아카이브 관리
+  const archiveLogs = useCallback((currentLogs: EquipmentLogEntry[], maxLogs = 100) => {
+    if (currentLogs.length > maxLogs) {
+      const archiveEntry: LogArchive = {
+        archivedAt: new Date().toISOString(),
+        logs: currentLogs.slice(maxLogs)
+      };
+
+      setLogArchive(prev => [...prev, archiveEntry]);
+      return currentLogs.slice(0, maxLogs);
+    }
+    return currentLogs;
+  }, []);
+
+  // 자동 복원 및 동기화 로직 추가
+  const autoRestoreAndSync = useCallback(async () => {
+    try {
+      // 클라우드 데이터 복원 시도
+      const cloudData = await cloudRestore();
+      
+      if (cloudData) {
+        // 데이터 병합
+        const mergedEquipmentData = safeMergeData(equipmentData, cloudData.equipmentData);
+        
+        // 로그 병합 및 아카이브
+        const mergedLogData = archiveLogs([
+          ...logData,
+          ...(cloudData.logData || [])
+        ]);
+
+        // 상태 업데이트
+        setEquipmentData(mergedEquipmentData);
+        setLogData(mergedLogData);
+        
+        // 로컬 스토리지 업데이트
+        localStorage.setItem('equipmentData', JSON.stringify(mergedEquipmentData));
+        localStorage.setItem('logData', JSON.stringify(mergedLogData));
+
+        console.log('✅ [useEquipmentData] 자동 동기화 및 복원 완료');
+      }
+    } catch (error) {
+      console.error('❌ [useEquipmentData] 자동 동기화 중 오류:', error);
+    }
+  }, [equipmentData, logData, cloudRestore, safeMergeData, archiveLogs]);
+
+  // 주기적 자동 복원 및 동기화 (15초마다)
+  useEffect(() => {
+    const syncInterval = setInterval(autoRestoreAndSync, 15000);
+    return () => clearInterval(syncInterval);
+  }, [autoRestoreAndSync]);
 
   // localStorage 키
   const STORAGE_KEYS = {
@@ -462,6 +527,7 @@ export const useEquipmentData = () => {
     });
   }, [logData]);
 
+  // 기존 로직 유지 및 추가 로직 통합
   return {
     equipmentData,
     logData,
@@ -482,6 +548,8 @@ export const useEquipmentData = () => {
     cloudBackup: cloudSave,
     cloudRestore,
     isOnline,
-    backupState
+    backupState,
+    // 새로 추가된 자동 동기화 함수
+    autoRestoreAndSync
   };
 };
