@@ -90,6 +90,16 @@ export interface SupbaseCategoryCode {
   name: string;
 }
 
+// 1. 메타데이터 필드의 Supabase 스키마 정의
+export interface SupabaseMetadata {
+  id?: number;
+  created_at?: string;
+  category_codes?: string[];
+  gemini_api_key?: string;
+  backup_time?: string;
+  backup_version?: string;
+}
+
 /**
  * Equipment 객체를 Supabase 형태로 변환
  * 기존 기능에 영향을 주지 않으면서 Supabase 호환성 추가
@@ -473,6 +483,106 @@ export class SupabaseMigrationHelper {
       ready: issues.length === 0,
       issues
     };
+  }
+}
+
+// 2. 타입 변환 함수 업데이트
+export function metadataToSupabase(metadata: {
+  categoryCodes?: any[];
+  geminiApiKey?: string | null;
+  backupTime?: string;
+  backupVersion?: string;
+}): SupabaseMetadata {
+  return {
+    category_codes: metadata.categoryCodes?.map(String),
+    gemini_api_key: metadata.geminiApiKey || undefined,
+    backup_time: metadata.backupTime,
+    backup_version: metadata.backupVersion
+  };
+}
+
+export function supabaseToMetadata(supabaseMetadata: SupabaseMetadata): {
+  categoryCodes?: any[];
+  geminiApiKey?: string;
+  backupTime?: string;
+  backupVersion?: string;
+} {
+  return {
+    categoryCodes: supabaseMetadata.category_codes,
+    geminiApiKey: supabaseMetadata.gemini_api_key,
+    backupTime: supabaseMetadata.backup_time,
+    backupVersion: supabaseMetadata.backup_version
+  };
+}
+
+// 3. 유효성 검증 로직 확장
+export function validateMetadataForSupabase(metadata: {
+  categoryCodes?: any[];
+  geminiApiKey?: string | null;
+  backupTime?: string;
+  backupVersion?: string;
+}): string[] {
+  const errors: string[] = [];
+
+  // 카테고리 코드 검증
+  if (metadata.categoryCodes && !Array.isArray(metadata.categoryCodes)) {
+    errors.push('카테고리 코드는 배열이어야 합니다.');
+  }
+
+  // 백업 버전 형식 검증
+  if (metadata.backupVersion && !/^\d+\.\d+\.\d+$/.test(metadata.backupVersion)) {
+    errors.push('백업 버전 형식이 올바르지 않습니다. (예: 3.1.0)');
+  }
+
+  // 백업 시간 형식 검증
+  if (metadata.backupTime) {
+    try {
+      const date = new Date(metadata.backupTime);
+      if (isNaN(date.getTime())) {
+        errors.push('백업 시간 형식이 올바르지 않습니다.');
+      }
+    } catch {
+      errors.push('백업 시간 형식이 올바르지 않습니다.');
+    }
+  }
+
+  return errors;
+}
+
+// 4. 마이그레이션 테스트 케이스 추가
+export class SupabaseMigrationTestHelper {
+  /**
+   * 메타데이터 마이그레이션 테스트
+   */
+  static testMetadataMigration(originalData: {
+    categoryCodes?: any[];
+    geminiApiKey?: string | null;
+    backupTime?: string;
+    backupVersion?: string;
+  }): boolean {
+    try {
+      // 유효성 검증
+      const validationErrors = validateMetadataForSupabase(originalData);
+      if (validationErrors.length > 0) {
+        console.error('메타데이터 유효성 검증 실패:', validationErrors);
+        return false;
+      }
+
+      // Supabase 형태로 변환
+      const supabaseMetadata = metadataToSupabase(originalData);
+      
+      // 다시 원래 형태로 복원
+      const restoredMetadata = supabaseToMetadata(supabaseMetadata);
+      
+      // 데이터 일치 확인
+      const isEqual = JSON.stringify(originalData) === JSON.stringify(restoredMetadata);
+      
+      console.log('메타데이터 마이그레이션 테스트:', isEqual ? '성공' : '실패');
+      return isEqual;
+    } catch (error) {
+      console.error('메타데이터 마이그레이션 테스트 중 오류:', error);
+      return false;
+    }
   }
 }
 

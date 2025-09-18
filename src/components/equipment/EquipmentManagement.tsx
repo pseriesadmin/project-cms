@@ -100,7 +100,17 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
             }
           ];
 
-          await cloudBackup(equipmentData, updatedLogData, logArchive, formFields, versionHistory);
+          await cloudBackup({
+            equipmentData,
+            logData: updatedLogData,
+            logArchive,
+            formFields,
+            versionHistory,
+            categoryCodes: JSON.parse(localStorage.getItem('category-codes') || '[]'),
+            geminiApiKey: localStorage.getItem('geminiApiKey') || null,
+            backupTime: new Date().toISOString(),
+            backupVersion: '3.1.0'
+          });
           
           // 백업 완료 스낵바 알림
           setBackupSnackbar({
@@ -189,7 +199,17 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
         }
       ];
 
-      await cloudBackup(equipmentData, updatedLogData, logArchive, formFields, versionHistory);
+      await cloudBackup({
+        equipmentData,
+        logData: updatedLogData,
+        logArchive,
+        formFields,
+        versionHistory,
+        categoryCodes: JSON.parse(localStorage.getItem('category-codes') || '[]'),
+        geminiApiKey: localStorage.getItem('geminiApiKey') || null,
+        backupTime: new Date().toISOString(),
+        backupVersion: '3.1.0'
+      });
       
       // 로컬 로그 상태 업데이트
       logDetailedChange('클라우드 백업', 'N/A', null, null);
