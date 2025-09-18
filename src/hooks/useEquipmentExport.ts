@@ -3,30 +3,29 @@ import Papa from 'papaparse';
 import { Equipment, FormField, EquipmentLogEntry, LogArchive } from '../types';
 import { advancedFileSystemBackup } from '../utils/backupUtils';
 
+// ProjectData 타입 정의 추가
+type ProjectData = {
+  equipmentData: Equipment[];
+  logData: EquipmentLogEntry[];
+  logArchive: LogArchive[];
+  formFields: FormField[];
+  versionHistory: any[];
+  categoryCodes: any;
+  geminiApiKey: string | null;
+  backupTime: string;
+  backupVersion: string;
+};
+
 export const useEquipmentExport = () => {
   // 클라우드 백업 (Vercel 기반)
   const cloudBackup = useCallback(async (
-    equipmentData: Equipment[],
-    logData: EquipmentLogEntry[],
-    logArchive: LogArchive[],
-    formFields: FormField[],
-    _versionHistory: any[]
+    data: ProjectData
   ) => {
     try {
-      const categoryCodes = JSON.parse(localStorage.getItem('category-codes') || '[]');
-      const geminiApiKey = localStorage.getItem('geminiApiKey') || null;
-
       const response = await fetch('/api/backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          equipmentData,
-          logData,
-          logArchive,
-          formFields,
-          categoryCodes,
-          geminiApiKey
-        })
+        body: JSON.stringify(data)
       });
 
       const result = await response.json();
@@ -238,7 +237,7 @@ export const useEquipmentExport = () => {
     versionHistory: any[]
   ) => {
     // 모든 등록 정보를 단일화하여 백업
-    const allData = {
+    const allData: ProjectData = {
       equipmentData,
       logData,
       logArchive,
@@ -251,12 +250,12 @@ export const useEquipmentExport = () => {
     };
 
     // 고급 파일 시스템 백업 함수 사용
-    return await advancedFileSystemBackup(allData, {
+    return await advancedFileSystemBackup(allData as unknown as Equipment[], {
       filePrefix: '크레이지샷_장비현황백업',
       onSuccess: (fileName) => {
         console.log(`장비현황 백업 완료: ${fileName}`);
         
-        // 백업 로그 생성
+        // 백업 로그 생성 및 저장
         const backupLog: EquipmentLogEntry = {
           id: `backup-${Date.now()}`,
           timestamp: new Date().toISOString(),
@@ -267,8 +266,9 @@ export const useEquipmentExport = () => {
           summary: `데이터가 ${fileName}으로 백업되었습니다.`
         };
 
-        // 로그 추가 로직 (선택적)
-        // setLogData(prev => [backupLog, ...prev]);
+        // 로컬 스토리지에 백업 로그 저장
+        const existingLogs = JSON.parse(localStorage.getItem('backupLogs') || '[]');
+        localStorage.setItem('backupLogs', JSON.stringify([backupLog, ...existingLogs]));
       },
       onError: (error) => {
         console.error('장비현황 백업 중 오류:', error);
@@ -422,6 +422,7 @@ export const useEquipmentExport = () => {
     restoreFromJSON,
     fallbackDownload,
     cloudBackup,
-    cloudRestore
+    cloudRestore,
+    cleanupOldBackupFiles  // 추가: 함수 반환
   };
 };
