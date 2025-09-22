@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { ProjectData } from '../types';
+import { ProjectData, LogEntry } from '../types';
 import { useRealtimeBackup } from './useRealtimeBackup';
 
 interface ProjectSyncOptions {
@@ -18,7 +18,7 @@ export const useProjectSync = (
   const {
     autoSave = false,
     autoRestore = true,
-    syncInterval = 15000, // 15초로 단축 (실시간성 향상)
+    syncInterval = 15000, // 15초 주기 유지
     pauseSync = false,
     syncStrategy = 'debounce'
   } = options;
@@ -26,7 +26,7 @@ export const useProjectSync = (
   // 백업 타임아웃 참조 추가
   const backupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 실시간 백업 시스템 통합 (사용자 ID 개선)
+  // 실시간 백업 시스템 통합
   const {
     saveToCloud: cloudSave,
     restoreFromCloud: cloudRestore,
@@ -38,43 +38,9 @@ export const useProjectSync = (
     autoSaveInterval: 300000 // 5분 (트래픽 최적화)
   });
 
-  // 로컬 저장소에서 프로젝트 데이터 복원 (강화된 검증 로직)
-  const restoreFromLocal = useCallback(() => {
-    try {
-      const savedData = localStorage.getItem('crazyshot_project_data');
-      if (savedData) {
-        try {
-          const parsedData = JSON.parse(savedData);
-          
-          // 데이터 구조 엄격 검증
-          const isValidData = 
-            parsedData && 
-            Array.isArray(parsedData.projectPhases) && 
-            Array.isArray(parsedData.logs) &&
-            typeof parsedData.version === 'string';
-          
-          if (!isValidData) {
-            console.warn('⚠️ 유효하지 않은 로컬 데이터 구조');
-            localStorage.removeItem('crazyshot_project_data');
-            return null;
-          }
-          
-          setProjectData(parsedData);
-          setLastSyncTime(new Date());
-          return parsedData;
-        } catch (parseError) {
-          console.error('❌ 로컬 데이터 파싱 오류:', parseError);
-          localStorage.removeItem('crazyshot_project_data');
-          return null;
-        }
-      } else {
-        return null;
-      }
-    } catch (error) {
-      console.error('❌ 로컬 복원 중 예상치 못한 오류:', error);
-      return null;
-    }
-  }, []);
+  // 프로젝트 데이터 상태 관리
+  const [projectData, setProjectData] = useState<ProjectData>(initialData);
+  const [lastBackupTimestamp, setLastBackupTimestamp] = useState<number>(Date.now());
 
   // 데이터 병합 함수 추가
   const safeMergeData = useCallback((localData: ProjectData, cloudData: ProjectData): ProjectData => {
@@ -102,11 +68,150 @@ export const useProjectSync = (
     };
   }, []);
 
+  // 고급 데이터 변경 감지 함수
+  const isDataChanged = useCallback((oldData: ProjectData, newData: ProjectData) => {
+    // 깊은 객체 구조 변경 감지
+    const deepCompare = (a: any, b: any): boolean => {
+      if (a === b) return false;
+      
+      if (typeof a !== typeof b) return true;
+      
+      if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) return true;
+        
+        return a.some((item, index) => 
+          deepCompare(item, b[index])
+        );
+      }
+      
+      if (typeof a === 'object' && a !== null && b !== null) {
+        const keysA = Object.keys(a);
+        const keysB = Object.keys(b);
+        
+        if (keysA.length !== keysB.length) return true;
+        
+        return keysA.some(key => 
+          deepCompare(a[key], b[key])
+        );
+      }
+      
+      return a !== b;
+    };
+
+    // 타임스탬프 기반 로그 변경 추적
+    const logsChanged = newData.logs.some((newLog: LogEntry) => 
+      !oldData.logs.some((oldLog: LogEntry) => 
+        oldLog.timestamp === newLog.timestamp
+      )
+    );
+
+    // 버전 변경 감지
+    const versionChanged = oldData.version !== newData.version;
+
+    return logsChanged || versionChanged || 
+      deepCompare(
+        { phases: oldData.projectPhases }, 
+        { phases: newData.projectPhases }
+      );
+  }, []);
+
+  // 조건부 클라우드 백업
+  const conditionalCloudBackup = useCallback(async (data: ProjectData) => {
+    const dataSize = JSON.stringify(data).length;
+    const backupConditions = {
+      isOnline: navigator.onLine,
+      dataSize: dataSize < 1000000, // 1MB 미만
+      timeSinceLastBackup: Date.now() - lastBackupTimestamp > 300000 // 5분 간격
+    };
+
+    if (Object.values(backupConditions).every(Boolean)) {
+      await cloudSave(data, {
+        backupType: 'AUTO',
+        backupSource: '스마트 동기화 백업'
+      });
+      
+      // 마지막 백업 타임스탬프 업데이트
+      setLastBackupTimestamp(Date.now());
+    }
+  }, [cloudSave, lastBackupTimestamp]);
+
+  // 스마트 동기화 트리거
+  const triggerSmartSync = useCallback(async () => {
+    try {
+      // 1. 네트워크 및 사용자 활성 상태 확인
+      if (!navigator.onLine) return;
+
+      // 2. 클라우드 데이터 복원
+      const cloudData = await cloudRestore(true);
+      
+      if (cloudData) {
+        const localData = JSON.parse(
+          localStorage.getItem('crazyshot_project_data') || '{}'
+        );
+        
+        // 3. 고급 변경 감지
+        if (isDataChanged(localData, cloudData)) {
+          // 4. 데이터 병합
+          const mergedData = safeMergeData(localData, cloudData);
+          
+          // 5. 상태 및 로컬 스토리지 업데이트
+          setProjectData(mergedData);
+          localStorage.setItem('crazyshot_project_data', JSON.stringify(mergedData));
+          
+          // 6. 브라우저 간 동기화 이벤트
+          window.dispatchEvent(new CustomEvent('project-sync', {
+            detail: { 
+              timestamp: Date.now(),
+              source: 'smart-sync'
+            }
+          }));
+          
+          // 7. 조건부 클라우드 백업
+          await conditionalCloudBackup(mergedData);
+        }
+      }
+    } catch (error) {
+      console.error('❌ 스마트 동기화 중 오류:', error);
+    }
+  }, [isDataChanged, safeMergeData, cloudRestore, conditionalCloudBackup]);
+
+  // 주기적 동기화 및 이벤트 리스너
+  useEffect(() => {
+    // 1. 주기적 동기화
+    const syncInterval = setInterval(() => {
+      if (isDataChanged(projectData, projectData)) {
+        triggerSmartSync();
+      }
+    }, 15000);
+
+    // 2. 커스텀 이벤트 리스너
+    const handleProjectSync = (event: CustomEvent) => {
+      console.log('🔄 [MultiUserSync] 외부 동기화 이벤트 감지', event.detail);
+      
+      // 중복 동기화 방지 로직
+      if (event.detail.source !== 'smart-sync') {
+        triggerSmartSync();
+      }
+    };
+
+    window.addEventListener('project-sync', handleProjectSync as EventListener);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('project-sync', handleProjectSync as EventListener);
+    };
+  }, [projectData, triggerSmartSync, isDataChanged]);
+
+  // 로컬 복원 함수 (빈 함수로 대체)
+  const restoreFromLocal = useCallback(() => {
+    console.warn('restoreFromLocal은 더 이상 사용되지 않습니다.');
+    return null;
+  }, []);
+
   // 버전 관리를 위한 상태
   const [currentVersion, setCurrentVersion] = useState<string>('');
 
   // 로컬 스토리지에서 저장된 데이터 먼저 확인
-  const [projectData, setProjectData] = useState<ProjectData>(initialData);
   const [isSyncing, setIsSyncing] = useState(false); // 초기 복원 로딩 상태
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
@@ -510,7 +615,7 @@ export const useProjectSync = (
     isOnline,
     backupState,
     currentVersion,
-    triggerSmartSync: () => smartCloudSave(projectData, true), // 현재 상태 기반 동기화
-    triggerSmartSyncFromLocal // 로컬스토리지 기반 동기화
+    triggerSmartSync,
+    triggerSmartSyncFromLocal
   };
 };
