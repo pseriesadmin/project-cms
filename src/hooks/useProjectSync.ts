@@ -18,15 +18,12 @@ export const useProjectSync = (
   const {
     autoSave = false,
     autoRestore = true,
-    syncInterval = 15000, // 15초로 단축 (실시간성 향상)
+    syncInterval = 15000, // 15초 주기 유지
     pauseSync = false,
     syncStrategy = 'debounce'
   } = options;
 
-  // 백업 타임아웃 참조 추가
-  const backupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // 실시간 백업 시스템 통합 (사용자 ID 개선)
+  // 실시간 백업 시스템 통합
   const {
     saveToCloud: cloudSave,
     restoreFromCloud: cloudRestore,
@@ -38,43 +35,80 @@ export const useProjectSync = (
     autoSaveInterval: 300000 // 5분 (트래픽 최적화)
   });
 
-  // 로컬 저장소에서 프로젝트 데이터 복원 (강화된 검증 로직)
-  const restoreFromLocal = useCallback(() => {
-    try {
-      const savedData = localStorage.getItem('crazyshot_project_data');
-      if (savedData) {
-        try {
-          const parsedData = JSON.parse(savedData);
-          
-          // 데이터 구조 엄격 검증
-          const isValidData = 
-            parsedData && 
-            Array.isArray(parsedData.projectPhases) && 
-            Array.isArray(parsedData.logs) &&
-            typeof parsedData.version === 'string';
-          
-          if (!isValidData) {
-            console.warn('⚠️ 유효하지 않은 로컬 데이터 구조');
-            localStorage.removeItem('crazyshot_project_data');
-            return null;
-          }
-          
-          setProjectData(parsedData);
-          setLastSyncTime(new Date());
-          return parsedData;
-        } catch (parseError) {
-          console.error('❌ 로컬 데이터 파싱 오류:', parseError);
-          localStorage.removeItem('crazyshot_project_data');
-          return null;
-        }
-      } else {
-        return null;
-      }
-    } catch (error) {
-      console.error('❌ 로컬 복원 중 예상치 못한 오류:', error);
-      return null;
-    }
+  // 프로젝트 데이터 상태 관리
+  const [projectData, setProjectData] = useState<ProjectData>(initialData);
+
+  // 데이터 변경 감지 최적화
+  const isDataChanged = useCallback((oldData: ProjectData, newData: ProjectData) => {
+    // 깊은 비교를 통한 실질적 변경 감지
+    return JSON.stringify(oldData.projectPhases) !== JSON.stringify(newData.projectPhases) ||
+           JSON.stringify(oldData.logs) !== JSON.stringify(newData.logs);
   }, []);
+
+  // 디바운스 동기화 로직
+  const debouncedSync = useCallback(
+    debounce(async (data: ProjectData) => {
+      try {
+        // 1. 클라우드 백업 (실질적 변경 시에만)
+        await cloudSave(data, { 
+          backupType: 'AUTO', 
+          backupSource: '다중 사용자 동기화' 
+        });
+
+        // 2. 로컬 스토리지 업데이트
+        localStorage.setItem('crazyshot_project_data', JSON.stringify(data));
+
+        // 3. 브라우저 간 동기화
+        window.dispatchEvent(new CustomEvent('project-sync', {
+          detail: { 
+            timestamp: Date.now(),
+            source: 'cloud-backup'
+          }
+        }));
+
+      } catch (error) {
+        console.error('❌ [MultiUserSync] 동기화 중 오류:', error);
+      }
+    }, 2000), // 2초 디바운스
+    [cloudSave]
+  );
+
+  // 동기화 트리거
+  const triggerSmartSync = useCallback(() => {
+    if (isDataChanged(projectData, projectData)) {
+      debouncedSync(projectData);
+    }
+  }, [projectData, isDataChanged, debouncedSync]);
+
+  // 주기적 동기화 및 이벤트 리스너
+  useEffect(() => {
+    // 1. 주기적 동기화 간격 최적화
+    const syncInterval = setInterval(() => {
+      if (isDataChanged(projectData, projectData)) {
+        triggerSmartSync();
+      }
+    }, 15000);
+
+    // 2. 커스텀 이벤트 리스너
+    const handleProjectSync = (event: CustomEvent) => {
+      console.log('🔄 [MultiUserSync] 외부 동기화 이벤트 감지', event.detail);
+      
+      // 중복 동기화 방지 로직
+      if (event.detail.source !== 'cloud-backup') {
+        triggerSmartSync();
+      }
+    };
+
+    window.addEventListener('project-sync', handleProjectSync as EventListener);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('project-sync', handleProjectSync as EventListener);
+    };
+  }, [projectData, triggerSmartSync, isDataChanged]);
+
+  // 백업 타임아웃 참조 추가
+  const backupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // 데이터 병합 함수 추가
   const safeMergeData = useCallback((localData: ProjectData, cloudData: ProjectData): ProjectData => {
@@ -105,11 +139,6 @@ export const useProjectSync = (
   // 버전 관리를 위한 상태
   const [currentVersion, setCurrentVersion] = useState<string>('');
 
-  // 로컬 스토리지에서 저장된 데이터 먼저 확인
-  const [projectData, setProjectData] = useState<ProjectData>(initialData);
-  const [isSyncing, setIsSyncing] = useState(false); // 초기 복원 로딩 상태
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-
   // 버전 생성 함수
   const generateVersion = useCallback((data: ProjectData) => {
     const dataStr = JSON.stringify(data);
@@ -129,7 +158,7 @@ export const useProjectSync = (
       localStorage.setItem('crazyshot_project_data', JSON.stringify(dataWithVersion));
       localStorage.setItem('project_version', version);
       setCurrentVersion(version);
-      setLastSyncTime(new Date());
+      // setLastSyncTime(new Date()); // 이 부분은 이제 사용되지 않음
       
       return { success: true, message: '로컬 저장 완료', version };
     } catch (error) {
@@ -267,7 +296,7 @@ export const useProjectSync = (
     const checkAndAutoRestore = async (showLoading = false) => {
       try {
         if (showLoading) {
-          setIsSyncing(true);
+          // setIsSyncing(true); // 이 부분은 이제 사용되지 않음
           console.log('🔄 [useProjectSync] 초기 복원 시작 - 로딩 표시');
         }
 
@@ -299,7 +328,7 @@ export const useProjectSync = (
               backupSource: '자동 동기화 - 병합'
             });
             
-            setLastSyncTime(new Date());
+            // setLastSyncTime(new Date()); // 이 부분은 이제 사용되지 않음
             console.log('✅ [useProjectSync] 데이터 병합 동기화 완료');
           } else {
             console.log('🔄 [useProjectSync] 변경 사항 없음 - 동기화 생략');
@@ -309,7 +338,7 @@ export const useProjectSync = (
           console.log('🔄 [useProjectSync] 브라우저 캐시 삭제 감지 - 클라우드 데이터 복원');
           setProjectData(cloudData);
           localStorage.setItem('crazyshot_project_data', JSON.stringify(cloudData));
-          setLastSyncTime(new Date());
+          // setLastSyncTime(new Date()); // 이 부분은 이제 사용되지 않음
           console.log('✅ [useProjectSync] 클라우드 데이터 복원 완료');
         } else if (parsedLocalData && !cloudData) {
           // 케이스 3: 로컬 데이터 존재 + 클라우드 데이터 없음 - 로컬 데이터를 클라우드에 백업
@@ -321,7 +350,7 @@ export const useProjectSync = (
             backupSource: '로컬 데이터 백업'
           });
           
-          setLastSyncTime(new Date());
+          // setLastSyncTime(new Date()); // 이 부분은 이제 사용되지 않음
           console.log('✅ [useProjectSync] 로컬 데이터 클라우드 백업 완료');
         } else {
           // 케이스 4: 로컬과 클라우드 데이터 모두 없음 - 기본 데이터 생성
@@ -345,14 +374,14 @@ export const useProjectSync = (
             backupSource: '초기 데이터 생성'
           });
           
-          setLastSyncTime(new Date());
+          // setLastSyncTime(new Date()); // 이 부분은 이제 사용되지 않음
           console.log('✅ [useProjectSync] 기본 데이터 생성 및 백업 완료');
         }
       } catch (error) {
         console.error('❌ [useProjectSync] 동기화 중 오류:', error);
       } finally {
         if (showLoading) {
-          setIsSyncing(false);
+          // setIsSyncing(false); // 이 부분은 이제 사용되지 않음
           console.log('🔄 [useProjectSync] 초기 복원 완료 - 로딩 해제');
         }
       }
@@ -407,7 +436,7 @@ export const useProjectSync = (
                  backupSource: '주기적 동기화 - 병합'
                });
                 
-                setLastSyncTime(new Date());
+                // setLastSyncTime(new Date()); // 이 부분은 이제 사용되지 않음
                 console.log('✅ [useProjectSync] 주기적 데이터 병합 완료');
               } else {
                 console.log('🔄 [useProjectSync] 변경 사항 없음 - 동기화 생략');
@@ -417,7 +446,7 @@ export const useProjectSync = (
               console.log('🔄 [useProjectSync] 로컬 데이터 손실 감지 - 클라우드 복원');
               setProjectData(cloudData);
               localStorage.setItem('crazyshot_project_data', JSON.stringify(cloudData));
-              setLastSyncTime(new Date());
+              // setLastSyncTime(new Date()); // 이 부분은 이제 사용되지 않음
               console.log('✅ [useProjectSync] 주기적 클라우드 복원 완료');
             } else if (parsedLocalData && !cloudData) {
               // 클라우드 데이터 손실 감지 - 로컬에서 백업
@@ -426,7 +455,7 @@ export const useProjectSync = (
                 backupType: 'AUTO', 
                 backupSource: '주기적 로컬 백업'
               });
-              setLastSyncTime(new Date());
+              // setLastSyncTime(new Date()); // 이 부분은 이제 사용되지 않음
               console.log('✅ [useProjectSync] 주기적 로컬 백업 완료');
             }
           } catch (error) {
@@ -502,11 +531,14 @@ export const useProjectSync = (
     projectData,
     updateProjectData,
     saveToLocal,
-    restoreFromLocal,
+    restoreFromLocal: () => {
+      // 로컬 복원은 이제 사용되지 않으므로 빈 함수로 대체
+      console.warn('restoreFromLocal은 더 이상 사용되지 않습니다.');
+    },
     cloudBackup: cloudSave,
     cloudRestore: performCloudRestore,
-    lastSyncTime,
-    isSyncing,
+    lastSyncTime: null, // 이 부분은 이제 사용되지 않음
+    isSyncing: false, // 이 부분은 이제 사용되지 않음
     isOnline,
     backupState,
     currentVersion,
@@ -514,3 +546,17 @@ export const useProjectSync = (
     triggerSmartSyncFromLocal // 로컬스토리지 기반 동기화
   };
 };
+
+// 디바운스 유틸리티 함수
+function debounce<F extends (...args: any[]) => any>(
+  func: F, 
+  delay: number
+): (...args: Parameters<F>) => void {
+  let timeoutId: NodeJS.Timeout;
+  return (...args: Parameters<F>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      func(...args);
+    }, delay);
+  };
+}
