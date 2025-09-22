@@ -18,7 +18,7 @@ export const useProjectSync = (
   const {
     autoSave = false,
     autoRestore = true,
-    syncInterval = 15000, // 15초 주기 유지
+    syncInterval = 15000, // 15초로 단축 (실시간성 향상)
     pauseSync = false,
     syncStrategy = 'debounce'
   } = options;
@@ -497,56 +497,6 @@ export const useProjectSync = (
     }
   }, [cloudRestore, backupState.isOnline]);
 
-  // 다중 사용자 동기화 강화
-  const enhancedSync = useCallback(async () => {
-    try {
-      // 1. 클라우드 데이터 복원 시도
-      const cloudData = await performCloudRestore(true);
-      
-      if (cloudData) {
-        // 2. 데이터 병합 로직
-        const mergedData = safeMergeData(projectData, cloudData);
-        
-        // 3. 변경 감지 시 업데이트
-        if (JSON.stringify(mergedData) !== JSON.stringify(projectData)) {
-          // 상태 및 로컬 스토리지 업데이트
-          setProjectData(mergedData);
-          localStorage.setItem('crazyshot_project_data', JSON.stringify(mergedData));
-          
-          // 4. 브라우저 간 동기화 트리거
-          window.dispatchEvent(new Event('storage'));
-          
-          // 5. 클라우드 백업
-          await cloudSave(mergedData, { 
-            backupType: 'AUTO', 
-            backupSource: '다중 사용자 동기화'
-          });
-        }
-      }
-    } catch (error) {
-      console.error('❌ [MultiUserSync] 동기화 중 오류:', error);
-    }
-  }, [projectData, cloudRestore, cloudSave]);
-
-  // 주기적 동기화 및 이벤트 리스너 추가
-  useEffect(() => {
-    // 1. 주기적 동기화
-    const syncInterval = setInterval(enhancedSync, 15000);
-
-    // 2. storage 이벤트 리스너 추가
-    const handleStorageChange = () => {
-      console.log('🔄 [MultiUserSync] 외부 스토리지 변경 감지');
-      enhancedSync();
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-      clearInterval(syncInterval);
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [enhancedSync]);
-
 
   return {
     projectData,
@@ -560,7 +510,7 @@ export const useProjectSync = (
     isOnline,
     backupState,
     currentVersion,
-    triggerSmartSync: enhancedSync, // 수동 동기화 트리거 추가
+    triggerSmartSync: () => smartCloudSave(projectData, true), // 현재 상태 기반 동기화
     triggerSmartSyncFromLocal // 로컬스토리지 기반 동기화
   };
 };
