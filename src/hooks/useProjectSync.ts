@@ -18,7 +18,7 @@ export const useProjectSync = (
   const {
     autoSave = false,
     autoRestore = true,
-    syncInterval = 15000, // 15초로 단축 (실시간성 향상)
+    syncInterval = 15000, // 기존 15초 주기 유지
     pauseSync = false,
     syncStrategy = 'debounce'
   } = options;
@@ -496,6 +496,42 @@ export const useProjectSync = (
       return null;
     }
   }, [cloudRestore, backupState.isOnline]);
+
+  // 최소한의 동기화 로직 개선
+  const enhancedSync = useCallback(async () => {
+    try {
+      const cloudData = await performCloudRestore(true);
+      
+      if (cloudData) {
+        // 기존 병합 로직 유지
+        const mergedData = safeMergeData(projectData, cloudData);
+        
+        if (JSON.stringify(mergedData) !== JSON.stringify(projectData)) {
+          setProjectData(mergedData);
+          
+          // 로컬 스토리지 업데이트
+          localStorage.setItem('crazyshot_project_data', JSON.stringify(mergedData));
+          
+          // 최소한의 동기화 이벤트
+          window.dispatchEvent(new Event('storage'));
+          
+          // 클라우드 백업
+          await cloudSave(mergedData, { 
+            backupType: 'AUTO', 
+            backupSource: '다중 사용자 동기화'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('❌ [MultiUserSync] 동기화 중 오류:', error);
+    }
+  }, [projectData, cloudRestore, cloudSave]);
+
+  // 기존 주기적 동기화 유지
+  useEffect(() => {
+    const syncInterval = setInterval(enhancedSync, 15000);
+    return () => clearInterval(syncInterval);
+  }, [enhancedSync]);
 
 
   return {
