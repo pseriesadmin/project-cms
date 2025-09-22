@@ -151,6 +151,25 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     return () => clearInterval(autoBackupInterval);
   }, [isOnline, isActive, hasMultipleUsers, equipmentData, logData, logArchive, formFields, versionHistory, cloudBackup]);
 
+  // 기존 storage 이벤트 핸들러 강화
+  const handleStorageChange = (event: StorageEvent) => {
+    // 특정 키에 대한 변경만 처리
+    const SYNC_KEYS = ['crazyshot_project_data', 'equipmentData'];
+    
+    if (event.key && SYNC_KEYS.includes(event.key)) {
+      // 기존 트리거 유지
+      window.dispatchEvent(new Event('storage'));
+      
+      // 최소한의 로깅 추가
+      console.log(`🔄 [MultiUserSync] ${event.key} 변경 감지`, {
+        timestamp: new Date().toISOString()
+      });
+    }
+  };
+
+  // 기존 이벤트 리스너 유지
+  window.addEventListener('storage', handleStorageChange);
+
   const handleExportCSV = () => {
     exportToCSV(equipmentData, formFields);
   };
@@ -315,7 +334,7 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
           console.log('✅ [EquipmentManagement] 클라우드 복원 완료');
           alert('클라우드 백업에서 데이터를 성공적으로 복원했습니다.');
           // 상태 동기화를 위한 storage 이벤트 트리거
-          window.dispatchEvent(new Event('storage'));
+  window.dispatchEvent(new Event('storage'));
         } else {
           console.log('📭 [EquipmentManagement] 클라우드에 복원할 데이터 없음');
           alert('클라우드에 저장된 백업 데이터가 없습니다.');
