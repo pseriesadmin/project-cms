@@ -594,17 +594,9 @@ const App: React.FC = () => {
       return;
     }
     try {
-      const currentTimestamp = Date.now();
-      const restoredTimestamp = dataToRestore.timestamp || 0;
-
-      if (restoredTimestamp <= (projectData.timestamp || 0)) {
-        alert('현재 데이터보다 오래된 백업은 복원할 수 없습니다.');
-        return;
-      }
-
+      // 파일 복원 시에도 기존 로그 누적 보존
       const restoredDataWithLog = {
         ...dataToRestore,
-        timestamp: currentTimestamp,
         logs: [
           ...(projectData.logs || []),
           ...dataToRestore.logs,
@@ -616,10 +608,12 @@ const App: React.FC = () => {
         ]
       };
       
+      // 올바른 방식으로 데이터 복원
       updateProjectData(draft => {
         Object.assign(draft, restoredDataWithLog);
       });
-
+      
+      // 즉시 클라우드 백업으로 다른 사용자에게 동기화
       setTimeout(async () => {
         try {
           await cloudBackup(restoredDataWithLog);
@@ -627,8 +621,9 @@ const App: React.FC = () => {
         } catch (backupError) {
           console.warn('⚠️ [App] 파일 복원 후 클라우드 백업 실패:', backupError);
         }
-      }, 100);
+      }, 100); // 상태 업데이트 후 실행
       
+      // 상태 동기화를 위한 storage 이벤트 트리거 (장비현황과 동일한 패턴)
       window.dispatchEvent(new Event('storage'));
       
       setDataToRestore(null);
