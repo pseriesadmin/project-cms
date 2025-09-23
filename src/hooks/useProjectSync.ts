@@ -475,27 +475,22 @@ export const useProjectSync = (
   }, [smartCloudSave]);
 
   // 클라우드 복원 함수 (타입 안전성 보장)
-  const performCloudRestore = useCallback(async (ignoreCacheOption = false): Promise<ProjectData | null> => {
+  const performCloudRestore = async (autoSync = false) => {
     try {
-      // 네트워크 상태 확인
-      if (!backupState.isOnline) {
-        console.warn('🚫 오프라인 상태 - 클라우드 복원 불가');
-        return null;
+      const localTimestamp = localStorage.getItem('last_backup_timestamp') || '0';
+      const cloudData = await cloudRestore(true); // 클라우드 복원 시 캐시 무시
+
+      if (cloudData && cloudData.timestamp > Number(localTimestamp)) {
+        localStorage.setItem('last_backup_timestamp', cloudData.timestamp.toString());
+        return cloudData.projectData;
       }
 
-      const cloudData = await cloudRestore(ignoreCacheOption);
-      
-      if (cloudData) {
-        // console.log('✅ 클라우드 복원 성공'); // 트래픽 최적화
-        return cloudData;
-      }
-      
       return null;
     } catch (error) {
       console.error('❌ 클라우드 복원 중 오류:', error);
       return null;
     }
-  }, [cloudRestore, backupState.isOnline]);
+  };
 
 
   return {
