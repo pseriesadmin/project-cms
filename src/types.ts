@@ -30,11 +30,19 @@ export interface LogEntry {
   timestamp: string;
   message: string;
   version?: string;
+  details?: {
+    dataSize?: number;
+    phaseCount?: number;
+    lastModified?: string;
+    backupVersion?: string;
+    backupTimestamp?: string;
+  };
 }
 
 export interface ProjectData {
   projectPhases: ProjectPhase[];
   logs: LogEntry[];
+  lastBackupTimestamp?: string;
   version?: string;
 }
 

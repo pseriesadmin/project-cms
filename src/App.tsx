@@ -2,7 +2,7 @@ import React from 'react';
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { ProjectPhaseCard } from './components/ProjectPhaseCard';
 import { initialData } from './data/initialData';
-import type { ProjectPhase, Task, ProjectData, ChecklistItem, PerformanceRecord } from './types';
+import type { ProjectPhase, Task, ProjectData, ChecklistItem, PerformanceRecord, LogEntry } from './types';
 import { CrazyshotLogo, DownloadIcon, UploadIcon, PlusIcon, SaveIcon, CloudUploadIcon, CloudDownloadIcon } from './components/icons';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChangeLogDisplay } from './components/ChangeLogDisplay';
@@ -421,31 +421,30 @@ const App: React.FC = () => {
       alert('🚨 클라우드 백업을 위해서는 인터넷 연결이 필요합니다.');
       return;
     }
+
     try {
-      console.log('🚀 [App] 클라우드 백업 시작');
-      // 백업 로그 생성 (누적 보존)
-      const backupLog = {
+      const backupLog: LogEntry = {
         timestamp: new Date().toLocaleString('ko-KR'),
         message: '클라우드 백업 실행',
-        version: `backup-${Date.now()}`
+        version: `backup-${Date.now()}`,
+        details: {
+          dataSize: JSON.stringify(projectData).length,
+          phaseCount: projectData.projectPhases.length,
+          lastModified: new Date().toISOString()
+        }
       };
 
-      // 기존 로그와 새 로그를 모두 보존하는 누적 데이터 생성
-      const updatedProjectData = {
+      const updatedProjectData: ProjectData = {
         ...projectData,
-        logs: [
-          ...projectData.logs, 
-          backupLog
-        ]
+        logs: [...projectData.logs, backupLog],
+        lastBackupTimestamp: backupLog.timestamp
       };
 
-      // 클라우드 백업 실행 (누적 보존 모드)
       await cloudBackup(updatedProjectData, {
         backupType: 'MANUAL',
         backupSource: '클라우드 백업 버튼'
       });
       
-      // 로컬 상태 업데이트
       updateProjectData(() => updatedProjectData);
       
       console.log('✅ [App] 클라우드 백업 완료');
@@ -461,12 +460,18 @@ const App: React.FC = () => {
       alert('🚨 클라우드 복원을 위해서는 인터넷 연결이 필요합니다.');
       return;
     }
+
     try {
-      console.log('🚀 [App] 클라우드 복원 시작');
       const restoredData = await cloudRestore();
+      
       if (restoredData) {
-        // 모든 로그 누적 보존 (기존 + 복원 + 복원 로그)
-        const restoredDataWithLog = {
+        const latestBackupLog = restoredData.logs
+          ?.filter((log): log is LogEntry => 
+            log.version !== undefined && log.version.startsWith('backup-')
+          )
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+
+        const restoredDataWithLog: ProjectData = {
           ...restoredData,
           logs: [
             ...(projectData.logs || []),
@@ -474,7 +479,11 @@ const App: React.FC = () => {
             {
               timestamp: getTimestamp(),
               message: '클라우드 백업에서 데이터가 성공적으로 복원되었습니다.',
-              version: currentVersion
+              version: currentVersion,
+              details: {
+                backupVersion: latestBackupLog?.version ?? undefined,
+                backupTimestamp: latestBackupLog?.timestamp ?? undefined
+              }
             }
           ]
         };
@@ -483,7 +492,10 @@ const App: React.FC = () => {
           Object.assign(draft, restoredDataWithLog);
         });
 
-        console.log('✅ [App] 클라우드 복원 완료');
+        console.log('✅ [App] 클라우드 복원 완료', {
+          backupVersion: latestBackupLog?.version,
+          backupTimestamp: latestBackupLog?.timestamp
+        });
         alert('클라우드 백업에서 데이터를 성공적으로 복원했습니다.');
       } else {
         console.log('📭 [App] 클라우드에 복원할 데이터 없음');
