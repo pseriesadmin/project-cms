@@ -15,6 +15,33 @@ export const useProjectSync = (
   initialData: ProjectData, 
   options: ProjectSyncOptions = {}
 ) => {
+  // 깊은 변경 감지 유틸리티 함수
+  const detectDeepChanges = useCallback((oldData: any, newData: any): boolean => {
+    // 기본 JSON 비교 (얕은 비교)
+    if (JSON.stringify(oldData) === JSON.stringify(newData)) return false;
+
+    // 깊은 객체 구조 변경 감지
+    function isEqual(a: any, b: any): boolean {
+      if (a === b) return true;
+      
+      // 객체 및 배열 타입 확인
+      if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+      
+      const keysA = Object.keys(a);
+      const keysB = Object.keys(b);
+      
+      if (keysA.length !== keysB.length) return false;
+      
+      for (const key of keysA) {
+        if (!keysB.includes(key) || !isEqual(a[key], b[key])) return false;
+      }
+      
+      return true;
+    }
+
+    return !isEqual(oldData, newData);
+  }, []);
+
   const {
     autoSave = false,
     autoRestore = true,
@@ -363,52 +390,33 @@ export const useProjectSync = (
 
   // 주기적 버전 체크 및 자동 복원 (자동 복원만 활성화)
   useEffect(() => {
-    console.log('✅ [useProjectSync] 자동 복원 동기화 활성화 - 백업은 수동');
+    console.log('✅ [useProjectSync] 자동 복원 동기화 활성화');
     
-    // 자동 복원 동기화 활성화 (백업은 수동)
     if (autoRestore) {
       const versionCheckInterval = setInterval(() => {
-        // 동기화 가능 여부 판단
-        const canSync = true; // 자동 복원은 수동 트리거로 처리
-
-        if (!canSync) return;
-
         const checkAndAutoRestore = async () => {
           try {
-            // 동기화 가능 여부 판단
-            const canSync = true; // 자동 복원은 수동 트리거로 처리
-
-            if (!canSync) return;
-
-            const localData = localStorage.getItem('crazyshot_project_data');
-            let parsedLocalData: ProjectData | null = null;
+            const localStorageData = localStorage.getItem('crazyshot_project_data');
+            const parsedLocalData = localStorageData ? JSON.parse(localStorageData) : null;
             
-            // 로컬 데이터 파싱 및 유효성 검사
-            try {
-              parsedLocalData = localData ? JSON.parse(localData) : null;
-            } catch (error) {
-              console.error('🚨 [useProjectSync] 로컬 데이터 파싱 오류:', error);
-              parsedLocalData = null;
-            }
-
-             // 클라우드 복원 시 캐시 무시로 최신 데이터 확보
-             const cloudData = await performCloudRestore(true);
+            const cloudData = await performCloudRestore(true);
             
             // 데이터 복원 및 동기화 로직 개선 (주기적 동기화)
             if (parsedLocalData && cloudData) {
-              const mergedData = safeMergeData(parsedLocalData, cloudData);
-              
-              if (JSON.stringify(mergedData) !== JSON.stringify(parsedLocalData)) {
+              // 깊은 변경 감지 알고리즘 적용
+              if (detectDeepChanges(parsedLocalData, cloudData)) {
+                const mergedData = safeMergeData(parsedLocalData, cloudData);
+                
                 setProjectData(mergedData);
                 localStorage.setItem('crazyshot_project_data', JSON.stringify(mergedData));
                 
-               await cloudSave(mergedData, { 
-                 backupType: 'AUTO', 
-                 backupSource: '주기적 동기화 - 병합'
-               });
+                await cloudSave(mergedData, { 
+                  backupType: 'AUTO', 
+                  backupSource: '깊은 변경 감지 - 주기적 동기화'
+                });
                 
                 setLastSyncTime(new Date());
-                console.log('✅ [useProjectSync] 주기적 데이터 병합 완료');
+                console.log('✅ [useProjectSync] 깊은 변경 감지 - 주기적 데이터 병합 완료');
               } else {
                 console.log('🔄 [useProjectSync] 변경 사항 없음 - 동기화 생략');
               }
@@ -431,33 +439,15 @@ export const useProjectSync = (
             }
           } catch (error) {
             console.error('❌ [useProjectSync] 동기화 중 오류:', error);
-          } finally {
-            // 백업 타이머도 정리
-            if (backupTimeoutRef.current) {
-              clearTimeout(backupTimeoutRef.current);
-            }
           }
         };
 
         checkAndAutoRestore();
       }, syncInterval);
-      return () => {
-        clearInterval(versionCheckInterval);
-        // 백업 타이머도 정리
-        if (backupTimeoutRef.current) {
-          clearTimeout(backupTimeoutRef.current);
-        }
-        console.log('🛑 [useProjectSync] 자동 복원 동기화 및 백업 타이머 정리');
-      };
+
+      return () => clearInterval(versionCheckInterval);
     }
-    
-    return () => {
-      // 백업 타이머 정리
-      if (backupTimeoutRef.current) {
-        clearTimeout(backupTimeoutRef.current);
-      }
-    };
-  }, [autoRestore, syncInterval, cloudRestore, cloudSave, safeMergeData]);
+  }, [autoRestore, syncInterval, cloudSave, detectDeepChanges]);
 
   // 스마트 동기화: 필요 시점 감지하여 강제 동기화 실행 (로컬스토리지 기반)
   const triggerSmartSyncFromLocal = useCallback(() => {
