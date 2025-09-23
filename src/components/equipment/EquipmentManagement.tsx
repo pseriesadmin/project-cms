@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Equipment, EquipmentLogEntry, FormField, VersionHistory } from '../../types';
 import { useEquipmentExport } from '../../hooks/useEquipmentExport';
 import { useActivityOptimizer } from '../../hooks/useActivityOptimizer';
@@ -16,8 +16,8 @@ interface EquipmentManagementProps {
   saveFormFields: (fields: FormField[]) => void;
   logDetailedChange: (action: string, itemCode: string, oldData: any, newData: any, userId?: string) => void;
   versionHistory: VersionHistory[];
-  backupState?: { pendingBackups: any[] };
-  isOnline?: boolean;
+  backupState?: { pendingBackups: any[] };  // 추가
+  isOnline?: boolean;  // 추가
 }
 
 export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
@@ -31,17 +31,19 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   saveFormFields,
   logDetailedChange,
   versionHistory,
-  backupState,
-  isOnline
+  backupState,  // 추가
+  isOnline      // 추가
 }) => {
   const importFileRef = useRef<HTMLInputElement>(null);
   const restoreFileRef = useRef<HTMLInputElement>(null);
 
-  // 사용자 활성 상태 및 다중 사용자 감지
+  // 사용자 활성 상태 감지
   const { isActive } = useActivityOptimizer({
-    inactivityThreshold: 5 * 60 * 1000,
-    activeCheckInterval: 60000
+    inactivityThreshold: 5 * 60 * 1000, // 5분 비활성
+    activeCheckInterval: 60000 // 1분마다 확인
   });
+
+  // 실시간 사용자 세션 관리 (다중 사용자 감지)
   const { hasMultipleUsers } = useUserSession();
 
   const {
@@ -53,79 +55,102 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     cloudRestore
   } = useEquipmentExport();
 
-  // 백업 스낵바 상태
+  // 백업 스낵바 상태 추가
   const [backupSnackbar, setBackupSnackbar] = useState({
     isVisible: false,
     message: '',
     type: 'info' as 'info' | 'success' | 'warning'
   });
 
-  // 간소화된 동기화 메커니즘
-  const saveAndSync = useCallback(async (
-    type: 'equipment' | 'formFields',
-    data: Equipment[] | FormField[]
-  ) => {
-    try {
-      // 1. 로컬 상태 업데이트
-      if (type === 'equipment') {
-        saveData(data as Equipment[]);
-      } else {
-        saveFormFields(data as FormField[]);
-      }
-
-      // 2. 로컬 스토리지에 저장
-      localStorage.setItem(`crazyshot_${type}_data`, JSON.stringify(data));
-
-      // 3. 클라우드 백업
-      await cloudBackup({
-        equipmentData: type === 'equipment' ? data as Equipment[] : equipmentData,
-        formFields: type === 'formFields' ? data as FormField[] : formFields,
-        logData,
-        logArchive,
-        versionHistory,
-        categoryCodes: JSON.parse(localStorage.getItem('category-codes') || '[]'),
-        geminiApiKey: localStorage.getItem('geminiApiKey') || null,
-        backupTime: new Date().toISOString(),
-        backupVersion: '3.1.0'
-      });
-
-      // 4. 브라우저 간 동기화 이벤트 트리거
-      window.dispatchEvent(new CustomEvent('equipment-sync', {
-        detail: { 
-          type, 
-          timestamp: Date.now() 
-        }
-      }));
-
-      console.log(`✅ [EquipmentSync] ${type} 동기화 완료`);
-    } catch (error) {
-      console.error(`❌ [EquipmentSync] ${type} 동기화 중 오류:`, error);
-    }
-  }, [equipmentData, formFields, logData, logArchive, versionHistory, saveData, saveFormFields]);
-
-  // 브라우저 간 실시간 동기화 리스너 설정
+  // 자동 백업 최적화 (30분 간격)
   useEffect(() => {
-    const syncHandler = async () => {
-      try {
-        const restoredData = await cloudRestore();
-        
-        if (restoredData) {
-          saveData(restoredData.equipmentData);
-          saveFormFields(restoredData.formFields);
+    const autoBackupInterval = setInterval(async () => {
+      // 온라인 상태 및 사용자 활성 상태에서만 백업
+      if (isOnline && isActive) {
+        try {
+          // 백업 직전 스낵바 알림
+          setBackupSnackbar({
+            isVisible: true,
+            message: '장비 데이터 자동 백업을 준비 중입니다...',
+            type: 'info'
+          });
+
+          // 동기화 전략 동적 조정
+          const syncStrategy = hasMultipleUsers ? 'immediate' : 'debounce';
+          
+          // 자동 백업 로그 생성
+          const backupLog = {
+            timestamp: new Date().toLocaleString('ko-KR'),
+            message: '장비 데이터 자동 백업 실행',
+            version: `auto-backup-${Date.now()}`,
+            syncStrategy,
+            isUserActive: isActive
+          };
+
+          const updatedLogData = [
+            ...logData,
+            {
+              id: Date.now() + Math.random() + '',
+              timestamp: new Date().toISOString(),
+              action: '자동 클라우드 백업',
+              itemCode: 'AUTO',
+              itemName: '장비 데이터 전체',
+              userId: 'system',
+              summary: backupLog.message
+            }
+          ];
+
+          await cloudBackup({
+            equipmentData,
+            logData: updatedLogData,
+            logArchive,
+            formFields,
+            versionHistory,
+            categoryCodes: JSON.parse(localStorage.getItem('category-codes') || '[]'),
+            geminiApiKey: localStorage.getItem('geminiApiKey') || null,
+            backupTime: new Date().toISOString(),
+            backupVersion: '3.1.0'
+          });
+          
+          // 백업 완료 스낵바 알림
+          setBackupSnackbar({
+            isVisible: true,
+            message: '장비 데이터 자동 백업이 완료되었습니다.',
+            type: 'success'
+          });
+
+          // 3초 후 스낵바 숨김
+          setTimeout(() => {
+            setBackupSnackbar(prev => ({ ...prev, isVisible: false }));
+          }, 3000);
+
+          console.log(`✅ 자동 백업 완료 (전략: ${syncStrategy}, 활성상태: ${isActive})`);
+        } catch (error) {
+          // 백업 실패 스낵바 알림
+          setBackupSnackbar({
+            isVisible: true,
+            message: '자동 백업 중 오류가 발생했습니다.',
+            type: 'warning'
+          });
+
+          // 3초 후 스낵바 숨김
+          setTimeout(() => {
+            setBackupSnackbar(prev => ({ ...prev, isVisible: false }));
+          }, 3000);
+
+          console.error('자동 백업 실패:', error);
         }
-      } catch (error) {
-        console.error('❌ [EquipmentSync] 동기화 리스너 오류:', error);
+      } else {
+        console.log('🚫 자동 백업 조건 미충족:', { 
+          온라인: isOnline, 
+          활성상태: isActive 
+        });
       }
-    };
+    }, 30 * 60 * 1000); // 30분마다 자동 백업
 
-    window.addEventListener('equipment-sync', syncHandler);
-    
-    return () => {
-      window.removeEventListener('equipment-sync', syncHandler);
-    };
-  }, [saveData, saveFormFields]);
+    return () => clearInterval(autoBackupInterval);
+  }, [isOnline, isActive, hasMultipleUsers, equipmentData, logData, logArchive, formFields, versionHistory, cloudBackup]);
 
-  // 기존 핸들러 복원
   const handleExportCSV = () => {
     exportToCSV(equipmentData, formFields);
   };
@@ -137,10 +162,6 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
       console.error('로컬 백업 실패:', error);
       alert('로컬 백업 중 오류가 발생했습니다.');
     }
-  };
-
-  const handleRestore = () => {
-    restoreFileRef.current?.click();
   };
 
   const handleCloudBackup = async () => {
@@ -201,6 +222,62 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     }
   };
 
+  const handleRestore = () => {
+    restoreFileRef.current?.click();
+  };
+
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const newEquipment = await importFromCSV(file, formFields);
+      saveData(newEquipment);
+      logDetailedChange('파일 가져오기', 'N/A', null, null);
+      alert('CSV 파일에서 데이터를 성공적으로 가져왔습니다.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'CSV 파일 가져오기에 실패했습니다.');
+    }
+    
+    // 파일 입력 초기화
+    event.target.value = '';
+  };
+
+  const handleFileRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (confirm('현재 데이터를 백업 파일의 데이터로 덮어쓰시겠습니까? 모든 기존 데이터가 사라집니다.')) {
+      try {
+        const restoredData = await restoreFromJSON(file);
+        
+        saveData(restoredData.equipmentData);
+        saveFormFields(restoredData.formFields);
+        logDetailedChange('파일 복원', 'N/A', null, null);
+        
+        alert('파일에서 데이터가 성공적으로 복원되었습니다.');
+        
+        // 즉시 클라우드 백업으로 다른 사용자에게 동기화
+        setTimeout(async () => {
+          try {
+            await handleCloudBackup();
+            console.log('✅ [EquipmentManagement] 파일 복원 후 클라우드 동기화 완료');
+          } catch (backupError) {
+            console.warn('⚠️ [EquipmentManagement] 파일 복원 후 클라우드 백업 실패:', backupError);
+          }
+        }, 100); // 상태 업데이트 후 실행
+        
+        // 상태 동기화를 위한 storage 이벤트 트리거
+        window.dispatchEvent(new Event('storage'));
+      } catch (error) {
+        alert(error instanceof Error ? error.message : '데이터 복원에 실패했습니다.');
+      }
+    }
+    
+    // 파일 입력 초기화
+    event.target.value = '';
+  };
+
   const handleCloudRestore = async () => {
     if (!isOnline) {
       alert('🚨 클라우드 복원을 위해서는 인터넷 연결이 필요합니다.');
@@ -250,46 +327,9 @@ export const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     }
   };
 
-  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const newEquipment = await importFromCSV(file, formFields);
-      saveAndSync('equipment', newEquipment);
-      logDetailedChange('파일 가져오기', 'N/A', null, null);
-      alert('CSV 파일에서 데이터를 성공적으로 가져왔습니다.');
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'CSV 파일 가져오기에 실패했습니다.');
-    }
-    
-    event.target.value = '';
-  };
-
-  const handleFileRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (confirm('현재 데이터를 백업 파일의 데이터로 덮어쓰시겠습니까? 모든 기존 데이터가 사라집니다.')) {
-      try {
-        const restoredData = await restoreFromJSON(file);
-        
-        saveAndSync('equipment', restoredData.equipmentData);
-        saveAndSync('formFields', restoredData.formFields);
-        
-        logDetailedChange('파일 복원', 'N/A', null, null);
-        alert('파일에서 데이터가 성공적으로 복원되었습니다.');
-      } catch (error) {
-        alert(error instanceof Error ? error.message : '데이터 복원에 실패했습니다.');
-      }
-    }
-    
-    event.target.value = '';
-  };
-
   return (
     <section className="bg-white rounded-lg shadow-sm border border-stone-200 mb-4 p-4">
-      {/* 기존 코드 그대로 유지 */}
+      {/* 백업 스낵바 추가 */}
       <TopSnackbar
         isVisible={backupSnackbar.isVisible}
         message={backupSnackbar.message}
